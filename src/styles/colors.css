@@ -1,0 +1,435 @@
+/**
+ * SafeTrack Chile - Extensiones y Utilidades de Color
+ * Complementa theme.css con clases específicas de la aplicación
+ */
+
+@import "tailwindcss";
+
+/* ============================================
+   CLASES UTILITARIAS PERSONALIZADAS
+   ============================================ */
+
+/* === BACKGROUNDS TEMÁTICOS === */
+.bg-operative-gradient {
+  background: linear-gradient(135deg, oklch(var(--triadic-operative)) 0%, oklch(75% 0.145 145) 100%);
+}
+
+.bg-administrative-gradient {
+  background: linear-gradient(135deg, oklch(var(--triadic-administrative)) 0%, oklch(78% 0.145 43) 100%);
+}
+
+.bg-strategic-gradient {
+  background: linear-gradient(135deg, oklch(var(--triadic-strategic)) 0%, oklch(68% 0.155 248) 100%);
+}
+
+/* === ESTADOS DE CUMPLIMIENTO === */
+.status-excellent {
+  background-color: oklch(var(--compliance-excellent) / 0.1);
+  color: oklch(var(--compliance-excellent));
+  border: 2px solid oklch(var(--compliance-excellent));
+}
+
+.status-good {
+  background-color: oklch(var(--compliance-good) / 0.1);
+  color: oklch(var(--compliance-good));
+  border: 2px solid oklch(var(--compliance-good));
+}
+
+.status-warning {
+  background-color: oklch(var(--compliance-warning) / 0.1);
+  color: oklch(var(--compliance-warning));
+  border: 2px solid oklch(var(--compliance-warning));
+}
+
+.status-alert {
+  background-color: oklch(var(--compliance-alert) / 0.1);
+  color: oklch(var(--compliance-alert));
+  border: 2px solid oklch(var(--compliance-alert));
+}
+
+.status-critical {
+  background-color: oklch(var(--compliance-critical) / 0.1);
+  color: oklch(var(--compliance-critical));
+  border: 2px solid oklch(var(--compliance-critical));
+}
+
+/* === BADGES DE ESTADO === */
+.badge-operative {
+  @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm font-medium;
+  background-color: oklch(var(--triadic-operative) / 0.15);
+  color: oklch(var(--triadic-operative));
+  border: 1px solid oklch(var(--triadic-operative) / 0.3);
+}
+
+.badge-administrative {
+  @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm font-medium;
+  background-color: oklch(var(--triadic-administrative) / 0.15);
+  color: oklch(var(--triadic-administrative));
+  border: 1px solid oklch(var(--triadic-administrative) / 0.3);
+}
+
+.badge-strategic {
+  @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm font-medium;
+  background-color: oklch(var(--triadic-strategic) / 0.15);
+  color: oklch(var(--triadic-strategic));
+  border: 1px solid oklch(var(--triadic-strategic) / 0.3);
+}
+
+.badge-auto {
+  @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm font-medium;
+  background-color: oklch(68% 0.180 329 / 0.15); /* Púrpura */
+  color: oklch(68% 0.180 329);
+  border: 1px solid oklch(68% 0.180 329 / 0.3);
+}
+
+/* === BOTONES ESPECIALIZADOS === */
+.btn-critical {
+  @apply px-4 py-2 rounded-lg font-medium shadow-critical transition-all;
+  background-color: oklch(var(--danger));
+  color: white;
+}
+
+.btn-critical:hover {
+  background-color: oklch(58% 0.235 27);
+  transform: scale(1.05);
+  box-shadow: 0 12px 20px -4px oklch(61% 0.222 27 / 0.4);
+}
+
+.btn-critical:active {
+  transform: scale(0.98);
+}
+
+.btn-safety-orange {
+  @apply px-4 py-2 rounded-lg font-medium transition-all;
+  background-color: oklch(var(--safety-orange));
+  color: white;
+}
+
+.btn-safety-orange:hover {
+  background-color: oklch(var(--safety-orange-dark));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px -1px oklch(var(--safety-orange) / 0.3);
+}
+
+.btn-institutional {
+  @apply px-4 py-2 rounded-lg font-medium transition-all;
+  background-color: oklch(var(--institutional-blue));
+  color: white;
+}
+
+.btn-institutional:hover {
+  background-color: oklch(var(--institutional-blue-dark));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px -1px oklch(var(--institutional-blue) / 0.3);
+}
+
+/* === CARDS TEMÁTICAS === */
+.card-operative {
+  @apply p-4 rounded-lg border-2 shadow-soft;
+  background-color: oklch(var(--triadic-operative) / 0.05);
+  border-color: oklch(var(--triadic-operative) / 0.2);
+}
+
+.card-administrative {
+  @apply p-4 rounded-lg border-2 shadow-soft;
+  background-color: oklch(var(--triadic-administrative) / 0.05);
+  border-color: oklch(var(--triadic-administrative) / 0.2);
+}
+
+.card-strategic {
+  @apply p-4 rounded-lg border-2 shadow-soft;
+  background-color: oklch(var(--triadic-strategic) / 0.05);
+  border-color: oklch(var(--triadic-strategic) / 0.2);
+}
+
+/* === INDICADORES DE SINCRONIZACIÓN === */
+.sync-online {
+  @apply h-2.5 w-2.5 rounded-full;
+  background-color: oklch(var(--success));
+  box-shadow: 0 0 8px oklch(var(--success) / 0.5);
+  animation: pulse-success 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.sync-offline {
+  @apply h-2.5 w-2.5 rounded-full;
+  background-color: oklch(var(--muted-foreground));
+}
+
+.sync-syncing {
+  @apply h-2.5 w-2.5 rounded-full;
+  background-color: oklch(var(--warning));
+  animation: pulse-warning 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.sync-error {
+  @apply h-2.5 w-2.5 rounded-full;
+  background-color: oklch(var(--danger));
+  animation: pulse-error 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* === ANIMACIONES === */
+@keyframes pulse-success {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes pulse-warning {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes pulse-error {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.2);
+  }
+}
+
+/* === OVERLAYS Y MODALES === */
+.overlay-dark {
+  background-color: oklch(0% 0 0 / 0.6);
+  backdrop-filter: blur(4px);
+}
+
+.overlay-light {
+  background-color: oklch(100% 0 0 / 0.8);
+  backdrop-filter: blur(4px);
+}
+
+/* === HIGHLIGHTS DE SEGURIDAD === */
+.highlight-warning {
+  @apply border-l-4 pl-4;
+  border-color: oklch(var(--warning));
+  background-color: oklch(var(--warning) / 0.1);
+}
+
+.highlight-danger {
+  @apply border-l-4 pl-4;
+  border-color: oklch(var(--danger));
+  background-color: oklch(var(--danger) / 0.1);
+}
+
+.highlight-info {
+  @apply border-l-4 pl-4;
+  border-color: oklch(var(--info));
+  background-color: oklch(var(--info) / 0.1);
+}
+
+.highlight-success {
+  @apply border-l-4 pl-4;
+  border-color: oklch(var(--success));
+  background-color: oklch(var(--success) / 0.1);
+}
+
+/* === GRÁFICOS Y VISUALIZACIONES === */
+.chart-bar-operative {
+  fill: oklch(var(--triadic-operative));
+}
+
+.chart-bar-administrative {
+  fill: oklch(var(--triadic-administrative));
+}
+
+.chart-bar-strategic {
+  fill: oklch(var(--triadic-strategic));
+}
+
+.chart-line-compliance {
+  stroke: oklch(var(--compliance-excellent));
+  stroke-width: 2.5;
+  fill: none;
+}
+
+/* === SKELETON LOADERS === */
+.skeleton {
+  @apply animate-pulse rounded-md;
+  background: linear-gradient(
+    90deg,
+    oklch(var(--muted)) 0%,
+    oklch(var(--muted-foreground) / 0.1) 50%,
+    oklch(var(--muted)) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* === FEEDBACK VISUAL === */
+.shake {
+  animation: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes shake {
+  10%, 90% {
+    transform: translateX(-2px);
+  }
+  20%, 80% {
+    transform: translateX(4px);
+  }
+  30%, 50%, 70% {
+    transform: translateX(-6px);
+  }
+  40%, 60% {
+    transform: translateX(6px);
+  }
+}
+
+.bounce-subtle {
+  animation: bounce-subtle 0.6s ease-in-out;
+}
+
+@keyframes bounce-subtle {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+/* === GLASS MORPHISM === */
+.glass-card {
+  @apply backdrop-blur-lg border;
+  background-color: oklch(var(--card) / 0.8);
+  border-color: oklch(var(--border) / 0.5);
+}
+
+.dark .glass-card {
+  background-color: oklch(var(--card) / 0.6);
+}
+
+/* === SCROLLBAR PERSONALIZADA === */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background-color: oklch(var(--muted));
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: oklch(var(--muted-foreground) / 0.5);
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: oklch(var(--muted-foreground) / 0.7);
+}
+
+/* === TOOLTIPS === */
+.tooltip {
+  @apply absolute z-50 px-3 py-2 text-sm rounded-md shadow-soft-lg;
+  background-color: oklch(var(--popover));
+  color: oklch(var(--popover-foreground));
+  border: 1px solid oklch(var(--border));
+  pointer-events: none;
+}
+
+/* === DIVIDERS === */
+.divider-operative {
+  @apply w-full h-px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    oklch(var(--triadic-operative)) 50%,
+    transparent 100%
+  );
+}
+
+.divider-administrative {
+  @apply w-full h-px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    oklch(var(--triadic-administrative)) 50%,
+    transparent 100%
+  );
+}
+
+.divider-strategic {
+  @apply w-full h-px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    oklch(var(--triadic-strategic)) 50%,
+    transparent 100%
+  );
+}
+
+/* === FOCUS STATES === */
+.focus-operative:focus-visible {
+  outline: 2px solid oklch(var(--triadic-operative));
+  outline-offset: 2px;
+}
+
+.focus-administrative:focus-visible {
+  outline: 2px solid oklch(var(--triadic-administrative));
+  outline-offset: 2px;
+}
+
+.focus-strategic:focus-visible {
+  outline: 2px solid oklch(var(--triadic-strategic));
+  outline-offset: 2px;
+}
+
+/* === UTILIDADES RESPONSIVE === */
+@media (max-width: 640px) {
+  /* Aumentar zonas táctiles en móvil */
+  .interactive {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Reducir padding en cards */
+  .card-operative,
+  .card-administrative,
+  .card-strategic {
+    @apply p-3;
+  }
+}
+
+/* === MODO DE IMPRESIÓN === */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+
+  .shadow-soft,
+  .shadow-soft-md,
+  .shadow-soft-lg,
+  .shadow-soft-xl {
+    box-shadow: none !important;
+  }
+}

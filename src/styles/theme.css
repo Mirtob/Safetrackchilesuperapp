@@ -1,0 +1,506 @@
+/**
+ * SafeTrack Chile - Sistema de Diseño con Psicología del Color Optimizada
+ * Enfoque: Reducir estrés cognitivo y fatiga visual del prevencionista
+ */
+
+@custom-variant dark (&:is(.dark *));
+
+/* ============================================
+   MODO CLARO - Optimizado para trabajo de campo y exteriores
+   ============================================ */
+:root {
+  color-scheme: light;
+  --font-size: 16px;
+
+  /* === COLORES CORPORATIVOS === */
+  /* Naranja de Seguridad (#FF8C00) - Energía controlada, visibilidad industrial */
+  --safety-orange: 29 93% 51%; /* oklch: vibrante pero no agresivo */
+  --safety-orange-light: 40 95% 57%;
+  --safety-orange-dark: 25 85% 45%;
+
+  /* Azul Institucional (#0055A4) - Confianza, profesionalismo, calma mental */
+  --institutional-blue: 54 100% 32%;
+  --institutional-blue-light: 57 90% 42%;
+  --institutional-blue-dark: 50 100% 26%;
+
+  /* === COLORES BASE === */
+  /* Fondo: Gris claro cálido para reducir fatiga visual bajo luz solar */
+  --background: 98% 0.004 264; /* Gris con mínimo tinte azul (calma) */
+  --foreground: 20% 0.020 264; /* Texto oscuro con alto contraste */
+
+  /* Superficies: Blanco puro para máxima claridad de información */
+  --card: 100% 0 0;
+  --card-foreground: 20% 0.020 264;
+  --popover: 100% 0 0;
+  --popover-foreground: 20% 0.020 264;
+
+  /* === COLORES PRIMARIOS === */
+  /* Primario: Azul institucional - Reduce ansiedad, transmite control */
+  --primary: 54% 0.183 258; /* Azul intermedio para botones principales */
+  --primary-foreground: 99% 0 0;
+
+  /* Secundario: Verde natural - Indica "todo OK", reduce tensión */
+  --secondary: 65% 0.153 155; /* Verde equilibrado (ni muy brillante ni apagado) */
+  --secondary-foreground: 99% 0 0;
+
+  /* Acento: Naranja seguridad - Llama atención sin generar alarma */
+  --accent: 73% 0.157 53; /* Naranja cálido corporativo */
+  --accent-foreground: 20% 0.020 264;
+
+  /* === COLORES DE ESTADO === */
+  /* Éxito: Verde vivo - Sensación de logro, progreso positivo */
+  --success: 68% 0.158 157;
+  
+  /* Advertencia: Amarillo mostaza - Precaución sin pánico */
+  --warning: 80% 0.135 88;
+  
+  /* Peligro: Rojo controlado - Solo para situaciones críticas */
+  --danger: 61% 0.222 27;
+  
+  /* Info: Azul cielo - Información neutra, no urgente */
+  --info: 67% 0.166 249;
+
+  /* Destructivo: Rojo para acciones irreversibles */
+  --destructive: 61% 0.222 27;
+  --destructive-foreground: 99% 0 0;
+
+  /* === ELEMENTOS NEUTRALES === */
+  /* Mutados: Elementos de fondo, menos relevantes */
+  --muted: 96% 0.008 264;
+  --muted-foreground: 58% 0.015 264; /* Texto secundario legible */
+
+  /* Bordes: Gris suave para delimitación sin agresividad */
+  --border: 91% 0.012 264;
+  --input: 91% 0.012 264;
+  --input-background: 97% 0.006 264;
+  --switch-background: 75% 0.008 264;
+
+  /* Anillo de foco: Azul para indicar interacción */
+  --ring: 67% 0.166 249;
+
+  /* === DASHBOARD TRIÁDICO (Estados Mentales) === */
+  /* Operativo: Verde - Acciones en terreno, seguridad activa */
+  --triadic-operative: 65% 0.153 155;
+  
+  /* Administrativo: Naranja - Gestión, documentación, energía */
+  --triadic-administrative: 73% 0.157 53;
+  
+  /* Estratégico: Azul - Análisis, cumplimiento, visión global */
+  --triadic-strategic: 54% 0.183 258;
+
+  /* === SEMÁFORO DE CUMPLIMIENTO === */
+  --compliance-excellent: 68% 0.158 157; /* Verde - >90% */
+  --compliance-good: 73% 0.142 135; /* Verde lima - 80-90% */
+  --compliance-warning: 80% 0.135 88; /* Amarillo - 70-80% */
+  --compliance-alert: 73% 0.157 53; /* Naranja - 60-70% */
+  --compliance-critical: 61% 0.222 27; /* Rojo - <60% */
+
+  /* === GRÁFICOS Y CHARTS === */
+  --chart-1: 65% 0.153 155; /* Verde */
+  --chart-2: 67% 0.166 249; /* Azul */
+  --chart-3: 73% 0.157 53; /* Naranja */
+  --chart-4: 68% 0.180 329; /* Magenta */
+  --chart-5: 75% 0.125 75; /* Amarillo */
+
+  /* === SIDEBAR === */
+  --sidebar: 99% 0.002 264;
+  --sidebar-foreground: 20% 0.020 264;
+  --sidebar-primary: 54% 0.183 258;
+  --sidebar-primary-foreground: 99% 0 0;
+  --sidebar-accent: 96% 0.008 264;
+  --sidebar-accent-foreground: 35% 0.025 264;
+  --sidebar-border: 91% 0.012 264;
+  --sidebar-ring: 67% 0.166 249;
+
+  /* === CONFIGURACIÓN VISUAL === */
+  --radius: 0.625rem; /* Bordes redondeados suaves */
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+}
+
+/* ============================================
+   MODO OSCURO - Optimizado para trabajo nocturno y oficina
+   ============================================ */
+.dark {
+  color-scheme: dark;
+
+  /* === COLORES CORPORATIVOS (Ajustados para oscuro) === */
+  --safety-orange: 75% 0.145 53; /* Menos intenso, más cálido */
+  --safety-orange-light: 80% 0.130 53;
+  --safety-orange-dark: 68% 0.155 53;
+
+  --institutional-blue: 68% 0.145 258; /* Más claro, menos saturado */
+  --institutional-blue-light: 75% 0.125 258;
+  --institutional-blue-dark: 60% 0.155 258;
+
+  /* === COLORES BASE === */
+  /* Fondo: Gris oscuro no puro - Reduce fatiga ocular nocturna */
+  --background: 18% 0.010 264; /* Zinc oscuro con mínimo azul */
+  --foreground: 98% 0.004 264; /* Texto claro sin deslumbrar */
+
+  /* Superficies: Capas elevadas más claras */
+  --card: 23% 0.012 264;
+  --card-foreground: 98% 0.004 264;
+  --popover: 23% 0.012 264;
+  --popover-foreground: 98% 0.004 264;
+
+  /* === COLORES PRIMARIOS (Menos saturados) === */
+  --primary: 73% 0.132 258; /* Azul suave para modo oscuro */
+  --primary-foreground: 18% 0.010 264;
+
+  --secondary: 75% 0.125 155; /* Verde menos vibrante */
+  --secondary-foreground: 18% 0.010 264;
+
+  --accent: 78% 0.135 53; /* Naranja cálido suave */
+  --accent-foreground: 18% 0.010 264;
+
+  /* === COLORES DE ESTADO (Ajustados) === */
+  --success: 75% 0.125 155;
+  --warning: 85% 0.118 88;
+  --danger: 70% 0.185 27;
+  --info: 73% 0.132 258;
+
+  --destructive: 70% 0.185 27;
+  --destructive-foreground: 98% 0.004 264;
+
+  /* === ELEMENTOS NEUTRALES === */
+  --muted: 28% 0.014 264;
+  --muted-foreground: 65% 0.010 264;
+
+  --border: 28% 0.014 264;
+  --input: 28% 0.014 264;
+  --input-background: 23% 0.012 264;
+  --switch-background: 40% 0.010 264;
+  --ring: 60% 0.145 258;
+
+  /* === DASHBOARD TRIÁDICO (Modo Oscuro) === */
+  --triadic-operative: 75% 0.125 155;
+  --triadic-administrative: 78% 0.135 53;
+  --triadic-strategic: 73% 0.132 258;
+
+  /* === SEMÁFORO DE CUMPLIMIENTO === */
+  --compliance-excellent: 75% 0.125 155;
+  --compliance-good: 78% 0.118 135;
+  --compliance-warning: 85% 0.118 88;
+  --compliance-alert: 78% 0.135 53;
+  --compliance-critical: 70% 0.185 27;
+
+  /* === GRÁFICOS Y CHARTS === */
+  --chart-1: 75% 0.125 155;
+  --chart-2: 73% 0.132 258;
+  --chart-3: 78% 0.135 53;
+  --chart-4: 75% 0.145 329;
+  --chart-5: 82% 0.108 75;
+
+  /* === SIDEBAR === */
+  --sidebar: 15% 0.012 264;
+  --sidebar-foreground: 98% 0.004 264;
+  --sidebar-primary: 73% 0.132 258;
+  --sidebar-primary-foreground: 98% 0.004 264;
+  --sidebar-accent: 28% 0.014 264;
+  --sidebar-accent-foreground: 98% 0.004 264;
+  --sidebar-border: 28% 0.014 264;
+  --sidebar-ring: 60% 0.145 258;
+}
+
+/* ============================================
+   MAPEO DE VARIABLES CSS PARA TAILWIND
+   ============================================ */
+@theme inline {
+  /* Colores base */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  /* Colores primarios */
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  /* Estados */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  /* Neutrales */
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+
+  /* Colores corporativos */
+  --color-safety-orange: var(--safety-orange);
+  --color-safety-orange-light: var(--safety-orange-light);
+  --color-safety-orange-dark: var(--safety-orange-dark);
+  --color-institutional-blue: var(--institutional-blue);
+  --color-institutional-blue-light: var(--institutional-blue-light);
+  --color-institutional-blue-dark: var(--institutional-blue-dark);
+
+  /* Dashboard Triádico */
+  --color-triadic-operative: var(--triadic-operative);
+  --color-triadic-administrative: var(--triadic-administrative);
+  --color-triadic-strategic: var(--triadic-strategic);
+
+  /* Semáforo de cumplimiento */
+  --color-compliance-excellent: var(--compliance-excellent);
+  --color-compliance-good: var(--compliance-good);
+  --color-compliance-warning: var(--compliance-warning);
+  --color-compliance-alert: var(--compliance-alert);
+  --color-compliance-critical: var(--compliance-critical);
+
+  /* Charts */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Sidebar */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Radios */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* ============================================
+   ESTILOS BASE
+   ============================================ */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  /* Optimización de renderizado de fuentes */
+  html {
+    font-size: var(--font-size);
+    font-smoothing: antialiased;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* === TIPOGRAFÍA POR DEFECTO === */
+  h1 {
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  h2 {
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  h3 {
+    font-size: var(--text-lg);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  h4 {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  label {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  button {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  input {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-normal);
+    line-height: 1.5;
+  }
+}
+
+/* ============================================
+   TRANSICIONES SUAVES
+   ============================================ */
+* {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 200ms;
+}
+
+/* ============================================
+   GRADIENTES TEMÁTICOS
+   ============================================ */
+.gradient-operative {
+  background: linear-gradient(135deg, oklch(var(--triadic-operative)) 0%, oklch(75% 0.145 145) 100%);
+}
+
+.gradient-administrative {
+  background: linear-gradient(135deg, oklch(var(--triadic-administrative)) 0%, oklch(78% 0.145 43) 100%);
+}
+
+.gradient-strategic {
+  background: linear-gradient(135deg, oklch(var(--triadic-strategic)) 0%, oklch(68% 0.155 248) 100%);
+}
+
+.gradient-calm {
+  background: linear-gradient(135deg, oklch(var(--institutional-blue)) 0%, oklch(60% 0.165 258) 100%);
+}
+
+.gradient-energy {
+  background: linear-gradient(135deg, oklch(var(--safety-orange)) 0%, oklch(78% 0.145 43) 100%);
+}
+
+.gradient-success {
+  background: linear-gradient(135deg, oklch(var(--success)) 0%, oklch(78% 0.135 147) 100%);
+}
+
+/* ============================================
+   SOMBRAS OPTIMIZADAS
+   ============================================ */
+.shadow-soft {
+  box-shadow: 0 1px 3px 0 oklch(0% 0 0 / 0.05), 0 1px 2px -1px oklch(0% 0 0 / 0.05);
+}
+
+.shadow-soft-md {
+  box-shadow: 0 4px 6px -1px oklch(0% 0 0 / 0.06), 0 2px 4px -2px oklch(0% 0 0 / 0.06);
+}
+
+.shadow-soft-lg {
+  box-shadow: 0 10px 15px -3px oklch(0% 0 0 / 0.07), 0 4px 6px -4px oklch(0% 0 0 / 0.07);
+}
+
+.shadow-soft-xl {
+  box-shadow: 0 20px 25px -5px oklch(0% 0 0 / 0.08), 0 8px 10px -6px oklch(0% 0 0 / 0.08);
+}
+
+/* Sombra elevada para FAB crítico */
+.shadow-critical {
+  box-shadow: 0 8px 16px -2px oklch(61% 0.222 27 / 0.3), 0 4px 8px -4px oklch(61% 0.222 27 / 0.3);
+}
+
+/* ============================================
+   ESTADOS INTERACTIVOS
+   ============================================ */
+.interactive {
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px -1px oklch(0% 0 0 / 0.1), 0 2px 4px -2px oklch(0% 0 0 / 0.1);
+}
+
+.interactive:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px 0 oklch(0% 0 0 / 0.05);
+}
+
+/* Feedback táctil para móvil */
+@media (hover: none) and (pointer: coarse) {
+  .interactive:active {
+    opacity: 0.8;
+  }
+}
+
+/* ============================================
+   UTILIDADES DE COLOR ESPECÍFICAS
+   ============================================ */
+
+/* Colores de texto corporativos */
+.text-safety-orange {
+  color: oklch(var(--safety-orange));
+}
+
+.text-institutional-blue {
+  color: oklch(var(--institutional-blue));
+}
+
+/* Fondos de estado */
+.bg-operative {
+  background-color: oklch(var(--triadic-operative) / 0.1);
+  color: oklch(var(--triadic-operative));
+}
+
+.bg-administrative {
+  background-color: oklch(var(--triadic-administrative) / 0.1);
+  color: oklch(var(--triadic-administrative));
+}
+
+.bg-strategic {
+  background-color: oklch(var(--triadic-strategic) / 0.1);
+  color: oklch(var(--triadic-strategic));
+}
+
+/* Bordes de cumplimiento */
+.border-compliance-excellent {
+  border-color: oklch(var(--compliance-excellent));
+}
+
+.border-compliance-warning {
+  border-color: oklch(var(--compliance-warning));
+}
+
+.border-compliance-critical {
+  border-color: oklch(var(--compliance-critical));
+}
+
+/* ============================================
+   ACCESIBILIDAD
+   ============================================ */
+
+/* Modo de alto contraste */
+@media (prefers-contrast: high) {
+  :root {
+    --foreground: 10% 0 0;
+    --border: 50% 0 0;
+  }
+
+  .dark {
+    --foreground: 100% 0 0;
+    --background: 10% 0 0;
+  }
+}
+
+/* Reducción de movimiento */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .interactive:hover {
+    transform: none;
+  }
+}
