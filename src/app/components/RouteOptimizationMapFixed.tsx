@@ -65,8 +65,7 @@ export function RouteOptimizationMapFixed({ locations, onRouteOptimized }: Route
   const [isCalculating, setIsCalculating] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Google Maps API Key - EN PRODUCCIÓN REAL debe estar en variable de entorno
-  const GOOGLE_MAPS_API_KEY = 'AIzaSyBFw0Qbyq9zTFTd-tZuZk1mLqpYFpSWcQ8';
+  const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
   const onLoad = useCallback((map: google.maps.Map) => {
     setMap(map);

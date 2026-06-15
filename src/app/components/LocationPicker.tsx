@@ -33,7 +33,7 @@ export function LocationPicker({ onLocationSelect, onClose, initialLocation }: L
 
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: 'YOUR_GOOGLE_MAPS_API_KEY' // ⚠️ IMPORTANTE: Reemplazar con tu API Key de Google Maps
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''
   });
 
   const [map, setMap] = useState<google.maps.Map | null>(null);
