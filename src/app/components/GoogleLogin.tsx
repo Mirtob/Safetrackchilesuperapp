@@ -114,11 +114,11 @@ export function GoogleLogin() {
         </div>
 
         {/* Botón principal */}
-        {showRealButton ? (
+        {showRealButton && (
           <Button
             onClick={handleSupabaseLogin}
             disabled={isLoading}
-            className="w-full mb-4 bg-white dark:bg-zinc-800 text-slate-800 dark:text-white border border-slate-300 dark:border-zinc-600 hover:bg-slate-50 dark:hover:bg-zinc-700 shadow-sm"
+            className="w-full mb-3 bg-white dark:bg-zinc-800 text-slate-800 dark:text-white border border-slate-300 dark:border-zinc-600 hover:bg-slate-50 dark:hover:bg-zinc-700 shadow-sm"
           >
             {isLoading ? (
               <Loader2 className="w-5 h-5 mr-2 animate-spin" />
@@ -132,14 +132,18 @@ export function GoogleLogin() {
             )}
             {isLoading ? 'Redirigiendo a Google...' : 'Continuar con Google'}
           </Button>
-        ) : (
-          <Button
-            onClick={handleDemoLogin}
-            className="w-full mb-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white"
-          >
-            Continuar en Modo Demostración
-          </Button>
         )}
+
+        <Button
+          onClick={handleDemoLogin}
+          variant={showRealButton ? 'outline' : 'default'}
+          className={showRealButton
+            ? 'w-full mb-4 text-slate-600 dark:text-zinc-300 border-slate-300 dark:border-zinc-600'
+            : 'w-full mb-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white'
+          }
+        >
+          Continuar en Modo Demostración
+        </Button>
 
         {/* Permisos */}
         <div className="space-y-2 mb-6">

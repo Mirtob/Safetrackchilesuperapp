@@ -38,6 +38,13 @@ export default function App() {
     }
   };
 
+  // Bootstrap de estructura Drive al autenticar (solo con Supabase real, no demo)
+  useEffect(() => {
+    if (isAuthenticated && isSupabaseConfigured) {
+      GoogleDriveService.bootstrapDriveStructure().catch(console.error);
+    }
+  }, [isAuthenticated]);
+
   useEffect(() => {
     if (!isSupabaseConfigured) {
       // Sin Supabase: modo demo con sesión simulada
@@ -63,7 +70,7 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('[Auth]', event, session ? `user=${session.user.email}` : 'no session');
       applySession(session);
-      if (event === 'INITIAL_SESSION') {
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
         setIsLoading(false);
       }
     });

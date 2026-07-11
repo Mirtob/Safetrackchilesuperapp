@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Building2, Plus, Trash2, MapPin, Save, Calendar, Settings } from 'lucide-react';
+import { ArrowLeft, Building2, Plus, Trash2, MapPin, Save, Calendar, Settings, HardDrive, Navigation } from 'lucide-react';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
@@ -7,6 +7,10 @@ import { Label } from '@/app/components/ui/label';
 import { Textarea } from '@/app/components/ui/textarea';
 import { Badge } from '@/app/components/ui/badge';
 import { toast } from 'sonner';
+import { GoogleDriveService } from '@/app/services/googleDrive';
+import { LocationPicker } from '@/app/components/LocationPicker';
+
+const isMapsConfigured = Boolean(import.meta.env.VITE_GOOGLE_MAPS_API_KEY);
 
 interface Sector {
   id: string;
@@ -20,6 +24,7 @@ interface CompanyData {
   name: string;
   rut: string;
   address: string;
+  coordinates?: { latitude: number; longitude: number };
   contactName: string;
   contactPhone: string;
   contactEmail: string;
@@ -50,6 +55,18 @@ export function CompanyOnboarding({ onBack, onComplete }: CompanyOnboardingProps
     contractType: 'asesoria',
     sectors: []
   });
+
+  const [isDriveLoading, setIsDriveLoading] = useState(false);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+
+  const handleLocationSelect = (location: { lat: number; lng: number; address?: string }) => {
+    setCompanyData(prev => ({
+      ...prev,
+      coordinates: { latitude: location.lat, longitude: location.lng },
+      address: location.address || prev.address,
+    }));
+    setShowLocationPicker(false);
+  };
 
   const [newSector, setNewSector] = useState<Omit<Sector, 'id'>>({
     name: '',
@@ -100,11 +117,27 @@ export function CompanyOnboarding({ onBack, onComplete }: CompanyOnboardingProps
     setStep('sectors');
   };
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     if (companyData.sectors.length === 0) {
       toast.error('Debes agregar al menos un sector');
       return;
     }
+
+    if (GoogleDriveService.isAuthorized()) {
+      setIsDriveLoading(true);
+      try {
+        const rootId = await GoogleDriveService.ensureSafeTrackFolder();
+        await GoogleDriveService.ensureCompanyStructure(companyData.name, rootId);
+        toast.success('Carpetas creadas en Google Drive');
+      } catch {
+        toast.error('No se pudieron crear las carpetas en Drive', {
+          description: 'La empresa se guardará de todas formas.',
+        });
+      } finally {
+        setIsDriveLoading(false);
+      }
+    }
+
     onComplete(companyData);
   };
 
@@ -227,14 +260,47 @@ export function CompanyOnboarding({ onBack, onComplete }: CompanyOnboardingProps
 
               <div className="md:col-span-2">
                 <Label htmlFor="address">Dirección</Label>
-                <Input
-                  id="address"
-                  value={companyData.address}
-                  onChange={(e) => setCompanyData(prev => ({ ...prev, address: e.target.value }))}
-                  placeholder="Av. Principal 1234, Comuna, Región"
-                  className="mt-1"
-                />
+                <div className="flex gap-2 mt-1">
+                  <Input
+                    id="address"
+                    value={companyData.address}
+                    onChange={(e) => setCompanyData(prev => ({ ...prev, address: e.target.value }))}
+                    placeholder="Av. Principal 1234, Comuna, Región"
+                    className="flex-1"
+                  />
+                  {isMapsConfigured && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowLocationPicker(v => !v)}
+                      className="shrink-0 border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20"
+                    >
+                      <MapPin className="w-4 h-4 mr-1" />
+                      {showLocationPicker ? 'Cerrar' : companyData.coordinates ? 'Ver mapa' : 'Ubicar'}
+                    </Button>
+                  )}
+                </div>
+                {companyData.coordinates && !showLocationPicker && (
+                  <p className="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center gap-1">
+                    <Navigation className="w-3 h-3" />
+                    {companyData.coordinates.latitude.toFixed(5)}, {companyData.coordinates.longitude.toFixed(5)}
+                  </p>
+                )}
               </div>
+
+              {showLocationPicker && (
+                <div className="md:col-span-2">
+                  <LocationPicker
+                    onLocationSelect={handleLocationSelect}
+                    onClose={() => setShowLocationPicker(false)}
+                    initialLocation={
+                      companyData.coordinates
+                        ? { lat: companyData.coordinates.latitude, lng: companyData.coordinates.longitude }
+                        : undefined
+                    }
+                  />
+                </div>
+              )}
 
               <div>
                 <Label htmlFor="industry">Rubro/Industria</Label>
@@ -479,6 +545,18 @@ export function CompanyOnboarding({ onBack, onComplete }: CompanyOnboardingProps
                   <h3 className="font-semibold text-zinc-700 dark:text-zinc-300 mb-2">Empresa</h3>
                   <p className="text-lg text-zinc-900 dark:text-white">{companyData.name}</p>
                   <p className="text-sm text-zinc-600 dark:text-zinc-400">RUT: {companyData.rut}</p>
+                  {companyData.address && (
+                    <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1 flex items-center gap-1">
+                      <MapPin className="w-3 h-3 shrink-0" />
+                      {companyData.address}
+                    </p>
+                  )}
+                  {companyData.coordinates && (
+                    <p className="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center gap-1">
+                      <Navigation className="w-3 h-3" />
+                      GPS: {companyData.coordinates.latitude.toFixed(5)}, {companyData.coordinates.longitude.toFixed(5)}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -514,10 +592,20 @@ export function CompanyOnboarding({ onBack, onComplete }: CompanyOnboardingProps
               </Button>
               <Button
                 onClick={handleComplete}
+                disabled={isDriveLoading}
                 className="bg-green-600 hover:bg-green-700 text-white"
               >
-                <Save className="w-4 h-4 mr-2" />
-                Guardar y Configurar Activos
+                {isDriveLoading ? (
+                  <>
+                    <HardDrive className="w-4 h-4 mr-2 animate-pulse" />
+                    Creando carpetas en Drive...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Guardar y Configurar Activos
+                  </>
+                )}
               </Button>
             </div>
           </>

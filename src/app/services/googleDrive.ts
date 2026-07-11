@@ -98,10 +98,49 @@ async function drivePost<T>(path: string, body: unknown): Promise<T> {
 }
 
 // ============================================================
+// ESTRUCTURA DE CARPETAS
+// ============================================================
+
+export const COMPANY_SUBFOLDERS = [
+  'Inspecciones',
+  'Accidentes e Incidentes',
+  'Capacitaciones y Charlas',
+  'Documentos Legales',
+  'EPP y Activos',
+  'Planes de Acción',
+  'Firmas',
+] as const;
+
+export const PORTFOLIO_SUBFOLDERS = [
+  'Honorarios',
+  'Gastos',
+  'Reportes',
+] as const;
+
+export type CompanySubfolder = (typeof COMPANY_SUBFOLDERS)[number];
+export type PortfolioSubfolder = (typeof PORTFOLIO_SUBFOLDERS)[number];
+
+// ============================================================
 // CARPETAS
 // ============================================================
 
 const FILE_FIELDS = 'id,name,mimeType,size,createdTime,modifiedTime,webViewLink,thumbnailLink,parents';
+
+/** Crea o reutiliza una carpeta por nombre dentro de un folder padre. */
+async function ensureFolder(name: string, parentId: string): Promise<string> {
+  const safeName = name.replace(/['"\\]/g, '');
+  const data = await driveGet<{ files: { id: string }[] }>('files', {
+    q: `name='${safeName}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`,
+    fields: 'files(id)',
+  });
+  if (data.files?.length > 0) return data.files[0].id;
+  const folder = await drivePost<{ id: string }>('files', {
+    name,
+    mimeType: MIME_TYPES.FOLDER,
+    parents: [parentId],
+  });
+  return folder.id;
+}
 
 /**
  * Lista carpetas en la raíz del Drive del usuario.
@@ -116,44 +155,74 @@ export const listCompanyFolders = async (): Promise<DriveFolder[]> => {
 };
 
 /**
- * Crea (o reutiliza) la carpeta raíz "SafeTrack" en el Drive del usuario.
+ * Crea (o reutiliza) la carpeta raíz "SafeTrack Chile" en el Drive del usuario.
  */
 export const ensureSafeTrackFolder = async (): Promise<string> => {
   const data = await driveGet<{ files: { id: string }[] }>('files', {
-    q: "name='SafeTrack' and mimeType='application/vnd.google-apps.folder' and 'root' in parents and trashed=false",
+    q: "name='SafeTrack Chile' and mimeType='application/vnd.google-apps.folder' and 'root' in parents and trashed=false",
     fields: 'files(id)',
   });
 
   if (data.files?.length > 0) return data.files[0].id;
 
   const folder = await drivePost<{ id: string }>('files', {
-    name: 'SafeTrack',
+    name: 'SafeTrack Chile',
     mimeType: MIME_TYPES.FOLDER,
   });
   return folder.id;
 };
 
 /**
- * Crea (o reutiliza) una subcarpeta de empresa dentro de "SafeTrack/".
+ * Crea (o reutiliza) una subcarpeta de empresa dentro de "SafeTrack Chile/".
  */
 export const ensureCompanyFolder = async (
   companyName: string,
   parentFolderId: string
-): Promise<string> => {
-  const safeName = companyName.replace(/['"]/g, '');
-  const data = await driveGet<{ files: { id: string }[] }>('files', {
-    q: `name='${safeName}' and mimeType='application/vnd.google-apps.folder' and '${parentFolderId}' in parents and trashed=false`,
-    fields: 'files(id)',
-  });
+): Promise<string> => ensureFolder(companyName, parentFolderId);
 
-  if (data.files?.length > 0) return data.files[0].id;
+/**
+ * Inicializa la estructura raíz en el primer login del usuario:
+ *
+ *   SafeTrack Chile/
+ *     _Portafolio Profesional/
+ *       Honorarios/  Gastos/  Reportes/
+ *
+ * Idempotente: si las carpetas ya existen, las reutiliza.
+ */
+export const bootstrapDriveStructure = async (): Promise<{
+  rootId: string;
+  portfolioId: string;
+}> => {
+  const rootId = await ensureSafeTrackFolder();
+  const portfolioId = await ensureFolder('_Portafolio Profesional', rootId);
+  await Promise.all(PORTFOLIO_SUBFOLDERS.map(name => ensureFolder(name, portfolioId)));
+  return { rootId, portfolioId };
+};
 
-  const folder = await drivePost<{ id: string }>('files', {
-    name: companyName,
-    mimeType: MIME_TYPES.FOLDER,
-    parents: [parentFolderId],
-  });
-  return folder.id;
+/**
+ * Crea (o reutiliza) la estructura de subcarpetas para una empresa:
+ *
+ *   SafeTrack Chile/[Empresa]/
+ *     Inspecciones/  Accidentes e Incidentes/  Capacitaciones y Charlas/
+ *     Documentos Legales/  EPP y Activos/  Planes de Acción/  Firmas/
+ *
+ * Llama esto al agregar una empresa nueva al portafolio.
+ */
+export const ensureCompanyStructure = async (
+  companyName: string,
+  rootId: string
+): Promise<{ companyId: string; folders: Record<CompanySubfolder, string> }> => {
+  const companyId = await ensureCompanyFolder(companyName, rootId);
+  const entries = await Promise.all(
+    COMPANY_SUBFOLDERS.map(async name => {
+      const id = await ensureFolder(name, companyId);
+      return [name, id] as [CompanySubfolder, string];
+    })
+  );
+  return {
+    companyId,
+    folders: Object.fromEntries(entries) as Record<CompanySubfolder, string>,
+  };
 };
 
 // ============================================================
@@ -292,6 +361,8 @@ export const GoogleDriveService = {
   listCompanyFolders,
   ensureSafeTrackFolder,
   ensureCompanyFolder,
+  bootstrapDriveStructure,
+  ensureCompanyStructure,
 
   // Archivos
   listFilesInFolder,
