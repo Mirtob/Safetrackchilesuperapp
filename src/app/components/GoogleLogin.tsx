@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Shield, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
@@ -26,6 +26,22 @@ const isGoogleConfigured = Boolean(
 export function GoogleLogin() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // ── Detecta errores que Supabase devuelve en la URL tras el redirect de Google
+  // (ej: provider mal configurado, redirect URL no autorizada, código expirado).
+  // Sin esto, un fallo en el callback OAuth solo se veía como "vuelve al login" sin explicación.
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const description =
+      query.get('error_description') || hash.get('error_description') ||
+      query.get('error') || hash.get('error');
+
+    if (description) {
+      setError(decodeURIComponent(description.replace(/\+/g, ' ')));
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, []);
 
   // ── Login real con Supabase + Google OAuth ────────────────────────────────
   const handleSupabaseLogin = async () => {
