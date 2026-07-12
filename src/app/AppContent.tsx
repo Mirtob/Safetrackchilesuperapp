@@ -55,10 +55,11 @@ import { useOfflineStorage } from '@/app/components/OfflineManager';
 import { useCompany, Company, Branch } from '@/app/context/CompanyContext';
 import { useLocationDetection } from '@/app/hooks/useLocationDetection';
 import { generatePDF, downloadPDF, shareViaWhatsApp } from '@/app/components/PDFGenerator';
-import { LayoutGrid, BarChart3, Menu, X, Sun, Moon, Download, TrendingUp, Palette, Package, ClipboardList, MapPin, Navigation, FileText } from 'lucide-react';
+import { LayoutGrid, BarChart3, Menu, X, Sun, Moon, Download, TrendingUp, Palette, Package, ClipboardList, MapPin, Navigation, FileText, LogOut } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { toast } from 'sonner';
+import type { UserData } from '@/app/App';
 
 // Mock data estático para evitar re-cálculos en cada render
 const INITIAL_MOCK_PENDING_ITEMS = [
@@ -119,7 +120,12 @@ type View =
 type FormType = 'inspection' | 'epp' | 'incident' | 'talk';
 type TalkDeliveryType = 'talk' | 'epp' | 'induction';
 
-export function AppContent() {
+interface AppContentProps {
+  userData: UserData | null;
+  onLogout: () => void;
+}
+
+export function AppContent({ userData, onLogout }: AppContentProps) {
   const [currentView, setCurrentView] = useState<View>('company-selector');
   const [previousView, setPreviousView] = useState<View>('triadic-dashboard'); // Vista anterior para navegación
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
@@ -234,9 +240,10 @@ export function AppContent() {
     switch (currentView) {
       case 'company-selector':
         return (
-          <CompanySelectorEnhanced 
+          <CompanySelectorEnhanced
             onSelectCompany={handleSelectCompany}
             onOpenProfessionalPortfolio={() => setCurrentView('professional-portfolio')}
+            onLogout={onLogout}
           />
         );
       
@@ -675,9 +682,10 @@ export function AppContent() {
       
       default:
         return (
-          <CompanySelectorEnhanced 
+          <CompanySelectorEnhanced
             onSelectCompany={handleSelectCompany}
             onOpenProfessionalPortfolio={() => setCurrentView('professional-portfolio')}
+            onLogout={onLogout}
           />
         );
     }
@@ -840,6 +848,17 @@ export function AppContent() {
             >
               {theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}
             </Button>
+            <Button
+              onClick={() => {
+                setShowMobileMenu(false);
+                onLogout();
+              }}
+              variant="outline"
+              className="w-full bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Cerrar Sesión
+            </Button>
           </div>
         </div>
       )}
@@ -874,7 +893,31 @@ export function AppContent() {
                   <X className="w-5 h-5 text-slate-600 dark:text-zinc-400" />
                 </button>
               </div>
-              
+
+              {userData && (
+                <div className="flex items-center gap-3 mb-6 p-3 rounded-lg bg-slate-50 dark:bg-zinc-700/50 border border-slate-200 dark:border-zinc-700">
+                  {userData.picture ? (
+                    <img
+                      src={userData.picture}
+                      alt={userData.name || userData.email}
+                      className="w-10 h-10 rounded-full flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0 font-medium">
+                      {(userData.name || userData.email || '?').charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
+                      {userData.name || 'Usuario'}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-zinc-400 truncate">
+                      {userData.email}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <nav className="space-y-1">
                 <button
                   onClick={() => {
@@ -952,6 +995,15 @@ export function AppContent() {
                       Modo Oscuro
                     </>
                   )}
+                </Button>
+
+                <Button
+                  onClick={onLogout}
+                  variant="outline"
+                  className="w-full bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40"
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Cerrar Sesión
                 </Button>
               </div>
             </div>

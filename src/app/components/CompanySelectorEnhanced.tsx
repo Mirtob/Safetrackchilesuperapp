@@ -13,7 +13,8 @@ import {
   Mail,
   Users,
   Shield,
-  Briefcase
+  Briefcase,
+  LogOut
 } from 'lucide-react';
 import { Card } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
@@ -40,9 +41,10 @@ interface Company {
 interface CompanySelectorEnhancedProps {
   onSelectCompany: (companyId: string) => void;
   onOpenProfessionalPortfolio?: () => void;
+  onLogout?: () => void;
 }
 
-export function CompanySelectorEnhanced({ onSelectCompany, onOpenProfessionalPortfolio }: CompanySelectorEnhancedProps) {
+export function CompanySelectorEnhanced({ onSelectCompany, onOpenProfessionalPortfolio, onLogout }: CompanySelectorEnhancedProps) {
   const [companies, setCompanies] = useState<Company[]>([
     {
       id: '1',
@@ -384,14 +386,27 @@ export function CompanySelectorEnhanced({ onSelectCompany, onOpenProfessionalPor
             <h1 className="text-slate-900 dark:text-white text-2xl font-bold">
               Mis Empresas
             </h1>
-            <Button
-              onClick={() => setShowCreateForm(true)}
-              size="sm"
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              Nueva Empresa
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => setShowCreateForm(true)}
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Nueva Empresa
+              </Button>
+              {onLogout && (
+                <Button
+                  onClick={onLogout}
+                  size="sm"
+                  variant="outline"
+                  className="border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20"
+                  aria-label="Cerrar sesión"
+                >
+                  <LogOut className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
           </div>
           <p className="text-slate-600 dark:text-zinc-400">Selecciona una empresa para gestionar</p>
         </div>

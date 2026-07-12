@@ -65,10 +65,14 @@ export default function App() {
     // Con Supabase: onAuthStateChange maneja TODO incluyendo el redirect de OAuth.
     // NO llamamos getSession() porque retorna null antes de que se procese
     // el hash de la URL, generando un flash del login antes de llegar al dashboard.
-    console.log('[Auth] hash al cargar:', window.location.hash.slice(0, 80));
+    if (import.meta.env.DEV) {
+      console.log('[Auth] hash al cargar:', window.location.hash.slice(0, 80));
+    }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('[Auth]', event, session ? `user=${session.user.email}` : 'no session');
+      if (import.meta.env.DEV) {
+        console.log('[Auth]', event, session ? `user=${session.user.email}` : 'no session');
+      }
       applySession(session);
       if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
         setIsLoading(false);

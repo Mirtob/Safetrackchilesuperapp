@@ -134,16 +134,18 @@ export function GoogleLogin() {
           </Button>
         )}
 
-        <Button
-          onClick={handleDemoLogin}
-          variant={showRealButton ? 'outline' : 'default'}
-          className={showRealButton
-            ? 'w-full mb-4 text-slate-600 dark:text-zinc-300 border-slate-300 dark:border-zinc-600'
-            : 'w-full mb-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white'
-          }
-        >
-          Continuar en Modo Demostración
-        </Button>
+        {/* Modo demo: solo disponible si Google/Supabase no están configurados.
+            En producción, con credenciales reales, este botón no debe existir
+            para evitar que cualquiera acceda al dashboard sin autenticarse. */}
+        {!showRealButton && (
+          <Button
+            onClick={handleDemoLogin}
+            variant="default"
+            className="w-full mb-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white"
+          >
+            Continuar en Modo Demostración
+          </Button>
+        )}
 
         {/* Permisos */}
         <div className="space-y-2 mb-6">
