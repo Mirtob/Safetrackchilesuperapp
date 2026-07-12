@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Receipt, Car, Coffee, MapPin, Calendar, DollarSign, Plus, Upload, Check, Clock } from 'lucide-react';
 import { Card } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
@@ -7,6 +7,12 @@ import { AddExpenseModal } from '@/app/components/professional/AddExpenseModal';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import {
+  fetchExpenses,
+  createExpense,
+  Expense,
+} from '@/app/services/expensesService';
+import { isSupabaseConfigured } from '@/app/services/supabase';
 
 interface ClientCompany {
   id: string;
@@ -14,94 +20,108 @@ interface ClientCompany {
   brandColor: string;
 }
 
-interface Expense {
-  id: string;
-  clientId: string;
-  clientName: string;
-  date: string;
-  category: 'transport' | 'fuel' | 'food' | 'accommodation' | 'materials' | 'other';
-  description: string;
-  amount: number;
-  receipt?: string; // URL del comprobante
-  location: string;
-  status: 'pending' | 'approved' | 'reimbursed';
-  gpsVerified: boolean;
-  mileage?: number; // Kilómetros recorridos (para transporte)
-}
-
 interface ExpenseTrackingProps {
   clients: ClientCompany[];
 }
 
+const MOCK_EXPENSES: Expense[] = [
+  {
+    id: 'EXP-001',
+    companyId: 'minera-1',
+    clientName: 'Minera Los Andes S.A.',
+    date: '2026-01-27',
+    category: 'transport',
+    description: 'Traslado Santiago - Calama (ida y vuelta)',
+    amount: 180000,
+    receipts: [],
+    location: 'Calama, Antofagasta',
+    status: 'pending',
+    gpsVerified: true,
+    mileage: 2800
+  },
+  {
+    id: 'EXP-002',
+    companyId: 'const-1',
+    clientName: 'Constructora Paredes Ltda.',
+    date: '2026-01-26',
+    category: 'food',
+    description: 'Almuerzo en terreno',
+    amount: 12000,
+    receipts: ['https://example.com/receipt-001.jpg'],
+    location: 'Las Condes, Santiago',
+    status: 'approved',
+    gpsVerified: true
+  },
+  {
+    id: 'EXP-003',
+    companyId: 'const-1',
+    clientName: 'Constructora Paredes Ltda.',
+    date: '2026-01-26',
+    category: 'fuel',
+    description: 'Combustible vehículo institucional',
+    amount: 33000,
+    receipts: ['https://example.com/receipt-002.jpg'],
+    location: 'Copec Las Condes',
+    status: 'approved',
+    gpsVerified: true
+  },
+  {
+    id: 'EXP-004',
+    companyId: 'food-1',
+    clientName: 'Alimentos del Sur SpA',
+    date: '2026-01-25',
+    category: 'accommodation',
+    description: 'Hotel 1 noche Puerto Montt',
+    amount: 65000,
+    receipts: ['https://example.com/receipt-003.jpg'],
+    location: 'Puerto Montt',
+    status: 'reimbursed',
+    gpsVerified: true
+  },
+  {
+    id: 'EXP-005',
+    companyId: 'food-1',
+    clientName: 'Alimentos del Sur SpA',
+    date: '2026-01-25',
+    category: 'materials',
+    description: 'EPP de repuesto para capacitación',
+    amount: 30000,
+    receipts: ['https://example.com/receipt-004.jpg'],
+    location: 'Puerto Montt',
+    status: 'reimbursed',
+    gpsVerified: false
+  }
+];
+
 export function ExpenseTracking({ clients }: ExpenseTrackingProps) {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [expenses, setExpenses] = useState<Expense[]>([
-    {
-      id: 'EXP-001',
-      clientId: 'minera-1',
-      clientName: 'Minera Los Andes S.A.',
-      date: '2026-01-27',
-      category: 'transport',
-      description: 'Traslado Santiago - Calama (ida y vuelta)',
-      amount: 180000,
-      location: 'Calama, Antofagasta',
-      status: 'pending',
-      gpsVerified: true,
-      mileage: 2800
-    },
-    {
-      id: 'EXP-002',
-      clientId: 'const-1',
-      clientName: 'Constructora Paredes Ltda.',
-      date: '2026-01-26',
-      category: 'food',
-      description: 'Almuerzo en terreno',
-      amount: 12000,
-      receipt: 'https://example.com/receipt-001.jpg',
-      location: 'Las Condes, Santiago',
-      status: 'approved',
-      gpsVerified: true
-    },
-    {
-      id: 'EXP-003',
-      clientId: 'const-1',
-      clientName: 'Constructora Paredes Ltda.',
-      date: '2026-01-26',
-      category: 'fuel',
-      description: 'Combustible vehículo institucional',
-      amount: 33000,
-      receipt: 'https://example.com/receipt-002.jpg',
-      location: 'Copec Las Condes',
-      status: 'approved',
-      gpsVerified: true
-    },
-    {
-      id: 'EXP-004',
-      clientId: 'food-1',
-      clientName: 'Alimentos del Sur SpA',
-      date: '2026-01-25',
-      category: 'accommodation',
-      description: 'Hotel 1 noche Puerto Montt',
-      amount: 65000,
-      receipt: 'https://example.com/receipt-003.jpg',
-      location: 'Puerto Montt',
-      status: 'reimbursed',
-      gpsVerified: true
-    },
-    {
-      id: 'EXP-005',
-      clientId: 'food-1',
-      clientName: 'Alimentos del Sur SpA',
-      date: '2026-01-25',
-      category: 'materials',
-      description: 'EPP de repuesto para capacitación',
-      amount: 30000,
-      receipt: 'https://example.com/receipt-004.jpg',
-      location: 'Puerto Montt',
-      status: 'reimbursed',
-      gpsVerified: false
-    }
-  ]);
+  const [expenses, setExpenses] = useState<Expense[]>(MOCK_EXPENSES);
+  const [isLoadingExpenses, setIsLoadingExpenses] = useState(true);
+
+  const canPersist = Boolean(isSupabaseConfigured && clients.length > 0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadExpenses = async () => {
+      setIsLoadingExpenses(true);
+      if (!canPersist) {
+        if (!cancelled) setExpenses(MOCK_EXPENSES);
+        if (!cancelled) setIsLoadingExpenses(false);
+        return;
+      }
+      try {
+        const data = await fetchExpenses(clients);
+        if (!cancelled) setExpenses(data);
+      } catch (err: any) {
+        console.warn('No se pudo cargar gastos desde Supabase:', err.message);
+        if (!cancelled) setExpenses(MOCK_EXPENSES);
+      } finally {
+        if (!cancelled) setIsLoadingExpenses(false);
+      }
+    };
+    loadExpenses();
+    return () => { cancelled = true; };
+  }, [clients, canPersist]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-CL', {
@@ -140,7 +160,7 @@ export function ExpenseTracking({ clients }: ExpenseTrackingProps) {
 
   // Agrupar por cliente
   const expensesByClient = clients.map(client => {
-    const clientExpenses = expenses.filter(e => e.clientId === client.id);
+    const clientExpenses = expenses.filter(e => e.companyId === client.id);
     const total = clientExpenses.reduce((sum, e) => sum + e.amount, 0);
     return {
       ...client,
@@ -169,12 +189,26 @@ export function ExpenseTracking({ clients }: ExpenseTrackingProps) {
     toast.success('Subir comprobante...');
   };
 
-  const handleSaveExpense = (data: any) => {
-    const newExpense: Expense = {
-      id: `EXP-${Date.now()}`,
-      ...data
-    };
-    setExpenses([newExpense, ...expenses]);
+  const handleSaveExpense = async (data: any) => {
+    const client = clients.find(c => c.id === data.companyId);
+    if (!client) return;
+
+    try {
+      if (canPersist) {
+        const created = await createExpense(data, client.name);
+        setExpenses([created, ...expenses]);
+      } else {
+        const newExpense: Expense = {
+          id: `EXP-${Date.now()}`,
+          clientName: client.name,
+          status: 'pending',
+          ...data
+        };
+        setExpenses([newExpense, ...expenses]);
+      }
+    } catch (err: any) {
+      toast.error('Error al guardar el gasto', { description: err.message });
+    }
   };
 
   return (
@@ -309,7 +343,14 @@ export function ExpenseTracking({ clients }: ExpenseTrackingProps) {
           Detalle de Gastos ({expenses.length})
         </h3>
 
-        {expenses.map(expense => {
+        {isLoadingExpenses && (
+          <div className="flex items-center justify-center py-8 text-zinc-400">
+            <Clock className="w-5 h-5 mr-2 animate-spin" />
+            Cargando gastos...
+          </div>
+        )}
+
+        {!isLoadingExpenses && expenses.map(expense => {
           const categoryInfo = getCategoryInfo(expense.category);
           const CategoryIcon = categoryInfo.icon;
           const statusBadge = getStatusBadge(expense.status);
@@ -386,7 +427,7 @@ export function ExpenseTracking({ clients }: ExpenseTrackingProps) {
 
                 {/* Right: Actions */}
                 <div className="flex md:flex-col gap-2">
-                  {expense.receipt ? (
+                  {expense.receipts.length > 0 ? (
                     <Button
                       size="sm"
                       variant="outline"

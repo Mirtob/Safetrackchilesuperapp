@@ -1,9 +1,19 @@
-import { useState } from 'react';
-import { FileText, Download, Check, Clock, AlertCircle, Plus, DollarSign, Calendar } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { FileText, Download, Check, Clock, AlertCircle, Plus, DollarSign, Calendar, X } from 'lucide-react';
 import { Card } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
+import { Input } from '@/app/components/ui/input';
+import { Label } from '@/app/components/ui/label';
+import { Textarea } from '@/app/components/ui/textarea';
 import { toast } from 'sonner';
+import {
+  fetchInvoices,
+  createInvoice,
+  markInvoiceAsPaid,
+  Invoice,
+} from '@/app/services/billingService';
+import { isSupabaseConfigured } from '@/app/services/supabase';
 
 interface ClientCompany {
   id: string;
@@ -14,62 +24,84 @@ interface ClientCompany {
   brandColor: string;
 }
 
-interface Invoice {
-  id: string;
-  clientId: string;
-  clientName: string;
-  invoiceNumber: string;
-  issueDate: string;
-  dueDate: string;
-  amount: number;
-  status: 'paid' | 'pending' | 'overdue';
-  description: string;
-  paymentMethod?: string;
-  paidDate?: string;
-}
-
 interface BillingManagementProps {
   clients: ClientCompany[];
 }
 
+const MOCK_INVOICES: Invoice[] = [
+  {
+    id: 'INV-001',
+    companyId: 'minera-1',
+    clientName: 'Minera Los Andes S.A.',
+    invoiceNumber: 'HN-2026-001',
+    issueDate: '2026-01-01',
+    dueDate: '2026-01-30',
+    amount: 2500000,
+    status: 'pending',
+    description: 'Honorarios mensuales - Enero 2026'
+  },
+  {
+    id: 'INV-002',
+    companyId: 'const-1',
+    clientName: 'Constructora Paredes Ltda.',
+    invoiceNumber: 'HN-2026-002',
+    issueDate: '2026-01-05',
+    dueDate: '2026-01-15',
+    amount: 980000,
+    status: 'pending',
+    description: 'Consultoría 28 horas'
+  },
+  {
+    id: 'INV-003',
+    companyId: 'food-1',
+    clientName: 'Alimentos del Sur SpA',
+    invoiceNumber: 'HN-2025-052',
+    issueDate: '2025-12-05',
+    dueDate: '2026-01-05',
+    amount: 1200000,
+    status: 'paid',
+    description: 'Asesoría + Honorarios Diciembre 2025',
+    paymentMethod: 'Transferencia',
+    paidDate: '2026-01-05'
+  }
+];
+
 export function BillingManagement({ clients }: BillingManagementProps) {
-  const [invoices] = useState<Invoice[]>([
-    {
-      id: 'INV-001',
-      clientId: 'minera-1',
-      clientName: 'Minera Los Andes S.A.',
-      invoiceNumber: 'HN-2026-001',
-      issueDate: '2026-01-01',
-      dueDate: '2026-01-30',
-      amount: 2500000,
-      status: 'pending',
-      description: 'Honorarios mensuales - Enero 2026'
-    },
-    {
-      id: 'INV-002',
-      clientId: 'const-1',
-      clientName: 'Constructora Paredes Ltda.',
-      invoiceNumber: 'HN-2026-002',
-      issueDate: '2026-01-05',
-      dueDate: '2026-01-15',
-      amount: 980000,
-      status: 'pending',
-      description: 'Consultoría 28 horas'
-    },
-    {
-      id: 'INV-003',
-      clientId: 'food-1',
-      clientName: 'Alimentos del Sur SpA',
-      invoiceNumber: 'HN-2025-052',
-      issueDate: '2025-12-05',
-      dueDate: '2026-01-05',
-      amount: 1200000,
-      status: 'paid',
-      description: 'Asesoría + Honorarios Diciembre 2025',
-      paymentMethod: 'Transferencia',
-      paidDate: '2026-01-05'
-    }
-  ]);
+  const [invoices, setInvoices] = useState<Invoice[]>(MOCK_INVOICES);
+  const [isLoadingInvoices, setIsLoadingInvoices] = useState(true);
+  const [showNewInvoiceForm, setShowNewInvoiceForm] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [newInvoice, setNewInvoice] = useState({
+    companyId: '',
+    amount: '',
+    description: '',
+    dueDate: '',
+  });
+
+  const canPersist = Boolean(isSupabaseConfigured && clients.length > 0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadInvoices = async () => {
+      setIsLoadingInvoices(true);
+      if (!canPersist) {
+        if (!cancelled) setInvoices(MOCK_INVOICES);
+        if (!cancelled) setIsLoadingInvoices(false);
+        return;
+      }
+      try {
+        const data = await fetchInvoices(clients);
+        if (!cancelled) setInvoices(data);
+      } catch (err: any) {
+        console.warn('No se pudo cargar facturas desde Supabase:', err.message);
+        if (!cancelled) setInvoices(MOCK_INVOICES);
+      } finally {
+        if (!cancelled) setIsLoadingInvoices(false);
+      }
+    };
+    loadInvoices();
+    return () => { cancelled = true; };
+  }, [clients, canPersist]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-CL', {
@@ -93,15 +125,76 @@ export function BillingManagement({ clients }: BillingManagementProps) {
   const totalOverdue = invoices.filter(i => i.status === 'overdue').reduce((sum, i) => sum + i.amount, 0);
 
   const handleGenerateInvoice = () => {
-    toast.success('Generando boleta de honorarios...');
+    if (clients.length === 0) {
+      toast.error('No tienes clientes con facturación activada todavía');
+      return;
+    }
+    setShowNewInvoiceForm(true);
+  };
+
+  const handleSaveNewInvoice = async () => {
+    if (!newInvoice.companyId || !newInvoice.amount || !newInvoice.description) {
+      toast.error('Completa cliente, monto y descripción');
+      return;
+    }
+    const client = clients.find(c => c.id === newInvoice.companyId);
+    if (!client) return;
+
+    setIsSaving(true);
+    try {
+      if (canPersist) {
+        const created = await createInvoice(
+          {
+            companyId: newInvoice.companyId,
+            amount: parseInt(newInvoice.amount),
+            description: newInvoice.description,
+            dueDate: newInvoice.dueDate || undefined,
+          },
+          client.name
+        );
+        setInvoices([created, ...invoices]);
+      } else {
+        const created: Invoice = {
+          id: `INV-${Date.now()}`,
+          companyId: newInvoice.companyId,
+          clientName: client.name,
+          invoiceNumber: `HN-${new Date().getFullYear()}-${String(invoices.length + 1).padStart(3, '0')}`,
+          issueDate: new Date().toISOString().split('T')[0],
+          dueDate: newInvoice.dueDate || '',
+          amount: parseInt(newInvoice.amount),
+          status: 'pending',
+          description: newInvoice.description,
+        };
+        setInvoices([created, ...invoices]);
+      }
+      toast.success('✅ Boleta de honorarios generada exitosamente');
+      setShowNewInvoiceForm(false);
+      setNewInvoice({ companyId: '', amount: '', description: '', dueDate: '' });
+    } catch (err: any) {
+      toast.error('Error al generar la boleta', { description: err.message });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDownloadInvoice = (invoiceNumber: string) => {
     toast.success(`Descargando ${invoiceNumber}...`);
   };
 
-  const handleMarkAsPaid = (invoiceId: string) => {
-    toast.success('Factura marcada como pagada');
+  const handleMarkAsPaid = async (invoiceId: string) => {
+    try {
+      if (canPersist) {
+        await markInvoiceAsPaid(invoiceId);
+      }
+      setInvoices(invoices.map(inv =>
+        inv.id === invoiceId
+          ? { ...inv, status: 'paid' as const, paidDate: new Date().toISOString().split('T')[0], paymentMethod: 'Transferencia' }
+          : inv
+      ));
+      toast.success('Factura marcada como pagada');
+    } catch (err: any) {
+      toast.error('Error al marcar como pagada', { description: err.message });
+    }
   };
 
   return (
@@ -167,7 +260,14 @@ export function BillingManagement({ clients }: BillingManagementProps) {
           Historial de Facturación ({invoices.length})
         </h3>
 
-        {invoices.map(invoice => {
+        {isLoadingInvoices && (
+          <div className="flex items-center justify-center py-8 text-zinc-400">
+            <Clock className="w-5 h-5 mr-2 animate-spin" />
+            Cargando facturas...
+          </div>
+        )}
+
+        {!isLoadingInvoices && invoices.map(invoice => {
           const statusBadge = getStatusBadge(invoice.status);
           const StatusIcon = statusBadge.icon;
 
@@ -279,6 +379,78 @@ export function BillingManagement({ clients }: BillingManagementProps) {
           </div>
         </div>
       </Card>
+
+      {/* Modal: Nueva Boleta */}
+      {showNewInvoiceForm && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowNewInvoiceForm(false)}>
+          <Card className="w-full max-w-lg bg-white dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Nueva Boleta de Honorarios</h3>
+                <button onClick={() => setShowNewInvoiceForm(false)} className="text-zinc-400 hover:text-zinc-900 dark:hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-zinc-900 dark:text-white">Cliente *</Label>
+                  <select
+                    value={newInvoice.companyId}
+                    onChange={(e) => setNewInvoice({ ...newInvoice, companyId: e.target.value })}
+                    className="w-full mt-1 px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white"
+                  >
+                    <option value="">Selecciona un cliente</option>
+                    {clients.map(client => (
+                      <option key={client.id} value={client.id}>{client.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <Label className="text-zinc-900 dark:text-white">Monto (CLP) *</Label>
+                  <Input
+                    type="number"
+                    value={newInvoice.amount}
+                    onChange={(e) => setNewInvoice({ ...newInvoice, amount: e.target.value })}
+                    placeholder="0"
+                    className="mt-1"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-zinc-900 dark:text-white">Descripción *</Label>
+                  <Textarea
+                    value={newInvoice.description}
+                    onChange={(e) => setNewInvoice({ ...newInvoice, description: e.target.value })}
+                    placeholder="Ej: Honorarios mensuales - Febrero 2026"
+                    className="mt-1"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-zinc-900 dark:text-white">Fecha de Vencimiento</Label>
+                  <Input
+                    type="date"
+                    value={newInvoice.dueDate}
+                    onChange={(e) => setNewInvoice({ ...newInvoice, dueDate: e.target.value })}
+                    className="mt-1"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <Button variant="outline" onClick={() => setShowNewInvoiceForm(false)} className="flex-1" disabled={isSaving}>
+                    Cancelar
+                  </Button>
+                  <Button onClick={handleSaveNewInvoice} className="flex-1 bg-[#0055A4] hover:bg-[#004080] text-white" disabled={isSaving}>
+                    {isSaving ? 'Generando...' : 'Generar Boleta'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

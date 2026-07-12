@@ -1,5 +1,14 @@
-import { useState } from 'react';
-import { 
+import { useState, useEffect } from 'react';
+import {
+  fetchClientPortfolio,
+  upsertBillingProfile,
+  ClientCompany,
+} from '@/app/services/clientPortfolioService';
+import { fetchTimeEntries, TimeEntry } from '@/app/services/hoursTrackingService';
+import { fetchInvoices, Invoice } from '@/app/services/billingService';
+import { isSupabaseConfigured } from '@/app/services/supabase';
+import { toast } from 'sonner';
+import {
   ArrowLeft, 
   Building2, 
   DollarSign,
@@ -23,6 +32,8 @@ import {
 import { Card } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
+import { Input } from '@/app/components/ui/input';
+import { Label } from '@/app/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs';
 import { CompanyOnboarding } from '@/app/components/portfolio/CompanyOnboarding';
 import { AssetManagement } from '@/app/components/portfolio/AssetManagement';
@@ -33,30 +44,71 @@ import { BillingManagement } from '@/app/components/professional/BillingManageme
 import { PortfolioExportModal } from '@/app/components/professional/PortfolioExportModal';
 import { SIIIntegration } from '@/app/components/professional/SIIIntegration';
 
-interface ClientCompany {
-  id: string;
-  name: string;
-  rut: string;
-  location: string;
-  contractType: 'consultoria' | 'asesoria' | 'completo';
-  hourlyRate: number; // Tarifa por hora en CLP
-  monthlyFee?: number; // Honorarios mensuales fijos
-  paymentDay: number; // Día del mes para cobro
-  lastPayment?: string;
-  nextPayment?: string;
-  hoursThisMonth: number;
-  pendingAmount: number; // Monto pendiente de cobro
-  expensesThisMonth: number;
-  status: 'active' | 'pending' | 'inactive';
-  brandColor: string;
-  startDate: string;
-}
-
 interface ProfessionalPortfolioProps {
   onBack: () => void;
 }
 
 type View = 'overview' | 'client-detail' | 'onboarding' | 'asset-management' | 'annual-plan';
+
+// Cartera de demostración: se usa solo si Supabase no está configurado
+const MOCK_CLIENTS: ClientCompany[] = [
+  {
+    id: 'minera-1',
+    name: 'Minera Los Andes S.A.',
+    rut: '76.123.456-7',
+    location: 'Calama, Región de Antofagasta',
+    contractType: 'completo',
+    hourlyRate: 0,
+    monthlyFee: 2500000,
+    paymentDay: 30,
+    lastPayment: '2025-12-30',
+    nextPayment: '2026-01-30',
+    hoursThisMonth: 45,
+    pendingAmount: 2500000,
+    expensesThisMonth: 180000,
+    status: 'active',
+    brandColor: '#DC2626',
+    startDate: '2025-06-01',
+    hasBillingProfile: true
+  },
+  {
+    id: 'const-1',
+    name: 'Constructora Paredes Ltda.',
+    rut: '77.234.567-8',
+    location: 'Santiago, Región Metropolitana',
+    contractType: 'consultoria',
+    hourlyRate: 35000,
+    paymentDay: 15,
+    lastPayment: '2025-12-15',
+    nextPayment: '2026-01-15',
+    hoursThisMonth: 28,
+    pendingAmount: 980000,
+    expensesThisMonth: 45000,
+    status: 'active',
+    brandColor: '#F59E0B',
+    startDate: '2025-08-15',
+    hasBillingProfile: true
+  },
+  {
+    id: 'food-1',
+    name: 'Alimentos del Sur SpA',
+    rut: '78.345.678-9',
+    location: 'Puerto Montt, Los Lagos',
+    contractType: 'asesoria',
+    hourlyRate: 30000,
+    monthlyFee: 800000,
+    paymentDay: 5,
+    lastPayment: '2026-01-05',
+    nextPayment: '2026-02-05',
+    hoursThisMonth: 18,
+    pendingAmount: 1340000,
+    expensesThisMonth: 95000,
+    status: 'active',
+    brandColor: '#10B981',
+    startDate: '2025-09-01',
+    hasBillingProfile: true
+  }
+];
 
 export function ProfessionalPortfolio({ onBack }: ProfessionalPortfolioProps) {
   const [currentView, setCurrentView] = useState<View>('overview');
@@ -66,62 +118,95 @@ export function ProfessionalPortfolio({ onBack }: ProfessionalPortfolioProps) {
   const [assetData, setAssetData] = useState<any[]>([]);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
-  // Mock data - En producción vendría de la base de datos
-  const [clients] = useState<ClientCompany[]>([
-    {
-      id: 'minera-1',
-      name: 'Minera Los Andes S.A.',
-      rut: '76.123.456-7',
-      location: 'Calama, Región de Antofagasta',
-      contractType: 'completo',
-      hourlyRate: 0,
-      monthlyFee: 2500000,
-      paymentDay: 30,
-      lastPayment: '2025-12-30',
-      nextPayment: '2026-01-30',
-      hoursThisMonth: 45,
-      pendingAmount: 2500000,
-      expensesThisMonth: 180000,
-      status: 'active',
-      brandColor: '#DC2626',
-      startDate: '2025-06-01'
-    },
-    {
-      id: 'const-1',
-      name: 'Constructora Paredes Ltda.',
-      rut: '77.234.567-8',
-      location: 'Santiago, Región Metropolitana',
-      contractType: 'consultoria',
-      hourlyRate: 35000,
-      paymentDay: 15,
-      lastPayment: '2025-12-15',
-      nextPayment: '2026-01-15',
-      hoursThisMonth: 28,
-      pendingAmount: 980000,
-      expensesThisMonth: 45000,
-      status: 'active',
-      brandColor: '#F59E0B',
-      startDate: '2025-08-15'
-    },
-    {
-      id: 'food-1',
-      name: 'Alimentos del Sur SpA',
-      rut: '78.345.678-9',
-      location: 'Puerto Montt, Los Lagos',
-      contractType: 'asesoria',
-      hourlyRate: 30000,
-      monthlyFee: 800000,
-      paymentDay: 5,
-      lastPayment: '2026-01-05',
-      nextPayment: '2026-02-05',
-      hoursThisMonth: 18,
-      pendingAmount: 1340000,
-      expensesThisMonth: 95000,
-      status: 'active',
-      brandColor: '#10B981',
-      startDate: '2025-09-01'
+  const [clients, setClients] = useState<ClientCompany[]>(MOCK_CLIENTS);
+  const [isLoadingClients, setIsLoadingClients] = useState(true);
+  const [activatingClientId, setActivatingClientId] = useState<string | null>(null);
+  const [billingForm, setBillingForm] = useState({
+    contractType: 'consultoria' as ClientCompany['contractType'],
+    hourlyRate: '',
+    monthlyFee: '',
+    paymentDay: '30',
+  });
+  const [isSavingBilling, setIsSavingBilling] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadClients = async () => {
+      setIsLoadingClients(true);
+      if (!isSupabaseConfigured) {
+        if (!cancelled) setClients(MOCK_CLIENTS);
+        if (!cancelled) setIsLoadingClients(false);
+        return;
+      }
+      try {
+        const data = await fetchClientPortfolio();
+        if (!cancelled) setClients(data);
+      } catch (err: any) {
+        console.warn('No se pudo cargar la cartera desde Supabase:', err.message);
+        if (!cancelled) setClients(MOCK_CLIENTS);
+      } finally {
+        if (!cancelled) setIsLoadingClients(false);
+      }
+    };
+    loadClients();
+    return () => { cancelled = true; };
+  }, []);
+
+  const [clientActivities, setClientActivities] = useState<TimeEntry[]>([]);
+  const [clientPayments, setClientPayments] = useState<Invoice[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadClientDetail = async () => {
+      if (!selectedClient || !isSupabaseConfigured) {
+        if (!cancelled) { setClientActivities([]); setClientPayments([]); }
+        return;
+      }
+      const client = clients.find(c => c.id === selectedClient);
+      if (!client) return;
+      try {
+        const [entries, invoicesData] = await Promise.all([
+          fetchTimeEntries([{ id: client.id, name: client.name }]),
+          fetchInvoices([{ id: client.id, name: client.name }]),
+        ]);
+        if (!cancelled) {
+          setClientActivities(entries.filter(e => e.status === 'completed').slice(0, 5));
+          setClientPayments(invoicesData.filter(i => i.status === 'paid').slice(0, 5));
+        }
+      } catch (err: any) {
+        console.warn('No se pudo cargar el detalle del cliente:', err.message);
+      }
+    };
+    loadClientDetail();
+    return () => { cancelled = true; };
+  }, [selectedClient, clients]);
+
+  const handleActivateBilling = async (clientId: string) => {
+    if (!billingForm.hourlyRate && !billingForm.monthlyFee) {
+      toast.error('Ingresa una tarifa por hora o un honorario mensual');
+      return;
     }
-  ]);
+    setIsSavingBilling(true);
+    try {
+      await upsertBillingProfile(clientId, {
+        contractType: billingForm.contractType,
+        hourlyRate: parseInt(billingForm.hourlyRate || '0'),
+        monthlyFee: billingForm.monthlyFee ? parseInt(billingForm.monthlyFee) : undefined,
+        paymentDay: parseInt(billingForm.paymentDay || '30'),
+        status: 'active',
+        brandColor: clients.find(c => c.id === clientId)?.brandColor || '#0055A4',
+      });
+      const data = await fetchClientPortfolio();
+      setClients(data);
+      toast.success('✅ Facturación activada para este cliente');
+      setActivatingClientId(null);
+      setBillingForm({ contractType: 'consultoria', hourlyRate: '', monthlyFee: '', paymentDay: '30' });
+    } catch (err: any) {
+      toast.error('Error al activar la facturación', { description: err.message });
+    } finally {
+      setIsSavingBilling(false);
+    }
+  };
 
   // Calcular métricas totales
   const totalClients = clients.length;
@@ -227,21 +312,25 @@ export function ProfessionalPortfolio({ onBack }: ProfessionalPortfolioProps) {
     }
 
     const statusBadge = getStatusBadge(client.status);
-    
-    // Mock data para actividades recientes
-    const recentActivities = [
-      { date: '2026-01-27', type: 'Inspección', description: 'Inspección de obra - Piso 3', hours: 3 },
-      { date: '2026-01-25', type: 'Charla', description: 'Charla de seguridad EPP', hours: 2 },
-      { date: '2026-01-22', type: 'Asesoría', description: 'Reunión gerencial', hours: 1.5 },
-      { date: '2026-01-20', type: 'Inspección', description: 'Revisión de equipos', hours: 4 },
-    ];
 
-    // Mock data para pagos
-    const paymentHistory = [
-      { month: 'Diciembre 2025', amount: client.monthlyFee || client.hourlyRate * 40, status: 'Pagado', date: '2025-12-30' },
-      { month: 'Noviembre 2025', amount: client.monthlyFee || client.hourlyRate * 38, status: 'Pagado', date: '2025-11-30' },
-      { month: 'Octubre 2025', amount: client.monthlyFee || client.hourlyRate * 42, status: 'Pagado', date: '2025-10-30' },
-    ];
+    const usingRealDetail = isSupabaseConfigured && client.hasBillingProfile;
+
+    const recentActivities = usingRealDetail
+      ? clientActivities.map(e => ({ date: e.date, type: 'Registro de horas', description: e.activity || 'Sin descripción', hours: e.duration }))
+      : [
+          { date: '2026-01-27', type: 'Inspección', description: 'Inspección de obra - Piso 3', hours: 3 },
+          { date: '2026-01-25', type: 'Charla', description: 'Charla de seguridad EPP', hours: 2 },
+          { date: '2026-01-22', type: 'Asesoría', description: 'Reunión gerencial', hours: 1.5 },
+          { date: '2026-01-20', type: 'Inspección', description: 'Revisión de equipos', hours: 4 },
+        ];
+
+    const paymentHistory = usingRealDetail
+      ? clientPayments.map(inv => ({ month: inv.description, amount: inv.amount, status: 'Pagado', date: inv.paidDate || inv.issueDate }))
+      : [
+          { month: 'Diciembre 2025', amount: client.monthlyFee || client.hourlyRate * 40, status: 'Pagado', date: '2025-12-30' },
+          { month: 'Noviembre 2025', amount: client.monthlyFee || client.hourlyRate * 38, status: 'Pagado', date: '2025-11-30' },
+          { month: 'Octubre 2025', amount: client.monthlyFee || client.hourlyRate * 42, status: 'Pagado', date: '2025-10-30' },
+        ];
 
     return (
       <div className="min-h-screen bg-zinc-50 dark:bg-zinc-900">
@@ -591,8 +680,107 @@ export function ProfessionalPortfolio({ onBack }: ProfessionalPortfolioProps) {
                 </Button>
               </div>
 
-              {clients.map(client => {
+              {isLoadingClients && (
+                <div className="flex items-center justify-center py-12 text-zinc-400">
+                  <Clock className="w-5 h-5 mr-2 animate-spin" />
+                  Cargando cartera...
+                </div>
+              )}
+
+              {!isLoadingClients && isSupabaseConfigured && clients.length === 0 && (
+                <Card className="p-8 text-center bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700">
+                  <Building2 className="w-10 h-10 text-zinc-300 mx-auto mb-3" />
+                  <p className="text-zinc-600 dark:text-zinc-400 text-sm">
+                    No tienes empresas registradas todavía. Agrega una empresa desde el selector para poder facturarle.
+                  </p>
+                </Card>
+              )}
+
+              {!isLoadingClients && clients.map(client => {
                 const statusBadge = getStatusBadge(client.status);
+
+                if (isSupabaseConfigured && !client.hasBillingProfile) {
+                  const isActivating = activatingClientId === client.id;
+                  return (
+                    <Card
+                      key={client.id}
+                      className="bg-white dark:bg-zinc-800 border-dashed border-2 border-zinc-300 dark:border-zinc-700 p-4"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div
+                          className="flex-shrink-0 w-14 h-14 rounded-lg flex items-center justify-center text-white font-bold text-lg"
+                          style={{ backgroundColor: client.brandColor }}
+                        >
+                          {client.name.charAt(0)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-zinc-900 dark:text-white">{client.name}</h3>
+                          <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-3">
+                            {client.rut} • Sin facturación activada
+                          </p>
+
+                          {!isActivating ? (
+                            <Button size="sm" variant="outline" onClick={() => setActivatingClientId(client.id)}>
+                              <Plus className="w-3 h-3 mr-1" />
+                              Activar facturación
+                            </Button>
+                          ) : (
+                            <div className="space-y-3 mt-2">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div>
+                                  <Label className="text-xs">Tipo de contrato</Label>
+                                  <select
+                                    value={billingForm.contractType}
+                                    onChange={(e) => setBillingForm({ ...billingForm, contractType: e.target.value as ClientCompany['contractType'] })}
+                                    className="w-full mt-1 px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-md bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm"
+                                  >
+                                    <option value="consultoria">Consultoría (Por Hora)</option>
+                                    <option value="asesoria">Asesoría (Mixto)</option>
+                                    <option value="completo">Servicio Completo (Mensual)</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <Label className="text-xs">Tarifa por hora (CLP)</Label>
+                                  <Input
+                                    type="number"
+                                    value={billingForm.hourlyRate}
+                                    onChange={(e) => setBillingForm({ ...billingForm, hourlyRate: e.target.value })}
+                                    placeholder="35000"
+                                    className="mt-1"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-xs">Honorario mensual (CLP)</Label>
+                                  <Input
+                                    type="number"
+                                    value={billingForm.monthlyFee}
+                                    onChange={(e) => setBillingForm({ ...billingForm, monthlyFee: e.target.value })}
+                                    placeholder="Opcional"
+                                    className="mt-1"
+                                  />
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  disabled={isSavingBilling}
+                                  onClick={() => handleActivateBilling(client.id)}
+                                  className="bg-[#FF8C00] hover:bg-[#FF8C00]/90 text-white"
+                                >
+                                  {isSavingBilling ? 'Guardando...' : 'Guardar'}
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => setActivatingClientId(null)}>
+                                  Cancelar
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                }
+
                 return (
                   <Card
                     key={client.id}

@@ -99,7 +99,7 @@ export function AddExpenseModal({ isOpen, onClose, clients, onSave }: AddExpense
     }
 
     const data = {
-      clientId: selectedClient,
+      companyId: selectedClient,
       clientName: selectedClientData?.name,
       date,
       category,
@@ -108,7 +108,6 @@ export function AddExpenseModal({ isOpen, onClose, clients, onSave }: AddExpense
       location,
       mileage: mileage ? parseFloat(mileage) : undefined,
       receipts: receipts.map(r => r.url),
-      status: 'pending',
       gpsVerified: true
     };
 

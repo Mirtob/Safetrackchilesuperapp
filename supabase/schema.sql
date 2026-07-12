@@ -234,6 +234,79 @@ CREATE TABLE IF NOT EXISTS inspection_config_elements (
 -- Códigos QR de acceso de emergencia (botón de pánico) por empresa
 -- Enlaces de acceso temporal para paquetes de documentación (Modo Fiscalización)
 -- Eventos del calendario/itinerario (vencimientos legales, rutinas, inspecciones recurrentes, capacitaciones)
+-- ── Cartera profesional del prevencionista (Capa 2 de billing: cobra a sus empresas cliente) ──
+-- El "cliente" de esta capa ES la misma empresa gestionada en `companies`; estas tablas solo
+-- agregan los datos comerciales/de facturación que no pertenecen al perfil de cumplimiento.
+
+-- Perfil de facturación por empresa cliente (1:1 con companies, se crea al "activar" el cobro)
+CREATE TABLE IF NOT EXISTS client_billing_profiles (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id     UUID REFERENCES companies(id) ON DELETE CASCADE NOT NULL UNIQUE,
+  contract_type  TEXT DEFAULT 'consultoria' CHECK (contract_type IN ('consultoria', 'asesoria', 'completo')),
+  hourly_rate    DECIMAL(12,2) DEFAULT 0,
+  monthly_fee    DECIMAL(12,2),
+  payment_day    INTEGER DEFAULT 30 CHECK (payment_day BETWEEN 1 AND 31),
+  status         TEXT DEFAULT 'active' CHECK (status IN ('active', 'pending', 'inactive')),
+  brand_color    TEXT DEFAULT '#0055A4',
+  start_date     DATE DEFAULT CURRENT_DATE,
+  created_at     TIMESTAMPTZ DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Boletas/facturas de honorarios emitidas a empresas cliente
+CREATE TABLE IF NOT EXISTS invoices (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id      UUID REFERENCES companies(id) ON DELETE CASCADE NOT NULL,
+  created_by      UUID REFERENCES auth.users(id) NOT NULL,
+  invoice_number  TEXT NOT NULL,
+  issue_date      DATE NOT NULL DEFAULT CURRENT_DATE,
+  due_date        DATE,
+  amount          DECIMAL(12,2) NOT NULL,
+  status          TEXT DEFAULT 'pending' CHECK (status IN ('paid', 'pending', 'overdue')),
+  description     TEXT,
+  payment_method  TEXT,
+  paid_date       DATE,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Registro de horas trabajadas por empresa cliente (base para facturación por hora)
+CREATE TABLE IF NOT EXISTS professional_time_entries (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id      UUID REFERENCES companies(id) ON DELETE CASCADE NOT NULL,
+  created_by      UUID REFERENCES auth.users(id) NOT NULL,
+  entry_date      DATE NOT NULL DEFAULT CURRENT_DATE,
+  start_time      TEXT,
+  end_time        TEXT,
+  duration_hours  DECIMAL(6,2) DEFAULT 0,
+  location        TEXT,
+  activity        TEXT,
+  hourly_rate     DECIMAL(12,2),
+  amount          DECIMAL(12,2) DEFAULT 0,
+  status          TEXT DEFAULT 'completed' CHECK (status IN ('in-progress', 'completed')),
+  gps_verified    BOOLEAN DEFAULT FALSE,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Rendición de gastos (viáticos) por empresa cliente
+CREATE TABLE IF NOT EXISTS professional_expenses (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id    UUID REFERENCES companies(id) ON DELETE CASCADE NOT NULL,
+  created_by    UUID REFERENCES auth.users(id) NOT NULL,
+  expense_date  DATE NOT NULL DEFAULT CURRENT_DATE,
+  category      TEXT DEFAULT 'other' CHECK (category IN ('transport', 'fuel', 'food', 'accommodation', 'materials', 'other')),
+  description   TEXT,
+  amount        DECIMAL(12,2) NOT NULL,
+  receipts      TEXT[] DEFAULT '{}',
+  location      TEXT,
+  mileage       DECIMAL(8,2),
+  status        TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'reimbursed')),
+  gps_verified  BOOLEAN DEFAULT FALSE,
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS scheduled_events (
   id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id            UUID REFERENCES companies(id) ON DELETE CASCADE NOT NULL,
@@ -350,6 +423,10 @@ CREATE TRIGGER trg_incidents_updated_at      BEFORE UPDATE ON incidents      FOR
 CREATE TRIGGER trg_incident_actions_updated_at BEFORE UPDATE ON incident_actions FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER trg_safety_kits_updated_at    BEFORE UPDATE ON safety_kits    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER trg_scheduled_events_updated_at BEFORE UPDATE ON scheduled_events FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_billing_profiles_updated_at BEFORE UPDATE ON client_billing_profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_invoices_updated_at       BEFORE UPDATE ON invoices        FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_time_entries_updated_at   BEFORE UPDATE ON professional_time_entries FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_expenses_updated_at       BEFORE UPDATE ON professional_expenses FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER trg_inspection_elements_updated_at BEFORE UPDATE ON inspection_config_elements FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER trg_qr_codes_updated_at       BEFORE UPDATE ON emergency_qr_codes FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER trg_safety_talks_updated_at   BEFORE UPDATE ON safety_talks   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
@@ -367,6 +444,10 @@ CREATE INDEX IF NOT EXISTS idx_inspections_company       ON inspections(company_
 CREATE INDEX IF NOT EXISTS idx_incidents_company         ON incidents(company_id);
 CREATE INDEX IF NOT EXISTS idx_incident_actions_incident ON incident_actions(incident_id);
 CREATE INDEX IF NOT EXISTS idx_incident_medical_incident ON incident_medical_records(incident_id);
+CREATE INDEX IF NOT EXISTS idx_billing_profiles_company  ON client_billing_profiles(company_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_company          ON invoices(company_id);
+CREATE INDEX IF NOT EXISTS idx_time_entries_company       ON professional_time_entries(company_id);
+CREATE INDEX IF NOT EXISTS idx_expenses_company          ON professional_expenses(company_id);
 CREATE INDEX IF NOT EXISTS idx_scheduled_events_company  ON scheduled_events(company_id);
 CREATE INDEX IF NOT EXISTS idx_scheduled_events_date      ON scheduled_events(event_date);
 CREATE INDEX IF NOT EXISTS idx_safety_kits_company       ON safety_kits(company_id);
@@ -391,6 +472,10 @@ ALTER TABLE inspections      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE incidents        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE incident_actions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE incident_medical_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE client_billing_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE invoices         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE professional_time_entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE professional_expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE scheduled_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE safety_kits      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE inspection_config_elements ENABLE ROW LEVEL SECURITY;
@@ -450,6 +535,16 @@ CREATE POLICY "incident_medical_by_incident" ON incident_medical_records FOR ALL
     JOIN user_company_roles ucr ON ucr.company_id = i.company_id
     WHERE ucr.user_id = auth.uid() AND ucr.is_active = TRUE
   ));
+
+-- Cartera profesional: accesible si tienes rol en la empresa (cliente)
+CREATE POLICY "billing_profiles_by_company" ON client_billing_profiles FOR ALL
+  USING (company_id IN (SELECT company_id FROM user_company_roles WHERE user_id = auth.uid() AND is_active = TRUE));
+CREATE POLICY "invoices_by_company" ON invoices FOR ALL
+  USING (company_id IN (SELECT company_id FROM user_company_roles WHERE user_id = auth.uid() AND is_active = TRUE));
+CREATE POLICY "time_entries_by_company" ON professional_time_entries FOR ALL
+  USING (company_id IN (SELECT company_id FROM user_company_roles WHERE user_id = auth.uid() AND is_active = TRUE));
+CREATE POLICY "expenses_by_company" ON professional_expenses FOR ALL
+  USING (company_id IN (SELECT company_id FROM user_company_roles WHERE user_id = auth.uid() AND is_active = TRUE));
 
 -- Eventos de calendario: accesibles si tienes rol en la empresa
 CREATE POLICY "scheduled_events_by_company" ON scheduled_events FOR ALL

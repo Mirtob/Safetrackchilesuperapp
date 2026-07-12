@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Clock, MapPin, Calendar, TrendingUp, Play, Square, DollarSign, Plus, Edit2 } from 'lucide-react';
 import { Card } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
@@ -7,6 +7,13 @@ import { AddHoursModal } from '@/app/components/professional/AddHoursModal';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import {
+  fetchTimeEntries,
+  createTimeEntry,
+  updateTimeEntry,
+  TimeEntry,
+} from '@/app/services/hoursTrackingService';
+import { isSupabaseConfigured } from '@/app/services/supabase';
 
 interface ClientCompany {
   id: string;
@@ -16,89 +23,101 @@ interface ClientCompany {
   brandColor: string;
 }
 
-interface TimeEntry {
-  id: string;
-  clientId: string;
-  clientName: string;
-  date: string;
-  startTime: string;
-  endTime?: string;
-  duration: number; // En horas
-  location: string;
-  activity: string;
-  amount: number; // Monto calculado
-  hourlyRate?: number; // Tarifa aplicada
-  status: 'in-progress' | 'completed';
-  gpsVerified: boolean;
-}
-
 interface HoursTrackingProps {
   clients: ClientCompany[];
 }
+
+const MOCK_TIME_ENTRIES: TimeEntry[] = [
+  {
+    id: 'TIME-001',
+    companyId: 'const-1',
+    clientName: 'Constructora Paredes Ltda.',
+    date: '2026-01-27',
+    startTime: '08:30',
+    endTime: '13:30',
+    duration: 5,
+    location: 'Obra Nueva Las Condes',
+    activity: 'Inspección de seguridad en obra',
+    amount: 175000,
+    status: 'completed',
+    gpsVerified: true
+  },
+  {
+    id: 'TIME-002',
+    companyId: 'const-1',
+    clientName: 'Constructora Paredes Ltda.',
+    date: '2026-01-26',
+    startTime: '09:00',
+    endTime: '12:00',
+    duration: 3,
+    location: 'Obra Nueva Las Condes',
+    activity: 'Capacitación EPP',
+    amount: 105000,
+    status: 'completed',
+    gpsVerified: true
+  },
+  {
+    id: 'TIME-003',
+    companyId: 'food-1',
+    clientName: 'Alimentos del Sur SpA',
+    date: '2026-01-25',
+    startTime: '14:00',
+    endTime: '18:00',
+    duration: 4,
+    location: 'Planta Puerto Montt',
+    activity: 'Auditoría de procesos',
+    amount: 120000,
+    status: 'completed',
+    gpsVerified: true
+  },
+  {
+    id: 'TIME-004',
+    companyId: 'minera-1',
+    clientName: 'Minera Los Andes S.A.',
+    date: '2026-01-27',
+    startTime: '09:00',
+    endTime: undefined,
+    duration: 0,
+    location: 'Faena Calama',
+    activity: 'Visita en progreso',
+    amount: 0,
+    status: 'in-progress',
+    gpsVerified: true
+  }
+];
 
 export function HoursTracking({ clients }: HoursTrackingProps) {
   const [activeEntry, setActiveEntry] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
 
-  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([
-    {
-      id: 'TIME-001',
-      clientId: 'const-1',
-      clientName: 'Constructora Paredes Ltda.',
-      date: '2026-01-27',
-      startTime: '08:30',
-      endTime: '13:30',
-      duration: 5,
-      location: 'Obra Nueva Las Condes',
-      activity: 'Inspección de seguridad en obra',
-      amount: 175000,
-      status: 'completed',
-      gpsVerified: true
-    },
-    {
-      id: 'TIME-002',
-      clientId: 'const-1',
-      clientName: 'Constructora Paredes Ltda.',
-      date: '2026-01-26',
-      startTime: '09:00',
-      endTime: '12:00',
-      duration: 3,
-      location: 'Obra Nueva Las Condes',
-      activity: 'Capacitación EPP',
-      amount: 105000,
-      status: 'completed',
-      gpsVerified: true
-    },
-    {
-      id: 'TIME-003',
-      clientId: 'food-1',
-      clientName: 'Alimentos del Sur SpA',
-      date: '2026-01-25',
-      startTime: '14:00',
-      endTime: '18:00',
-      duration: 4,
-      location: 'Planta Puerto Montt',
-      activity: 'Auditoría de procesos',
-      amount: 120000,
-      status: 'completed',
-      gpsVerified: true
-    },
-    {
-      id: 'TIME-004',
-      clientId: 'minera-1',
-      clientName: 'Minera Los Andes S.A.',
-      date: '2026-01-27',
-      startTime: '09:00',
-      endTime: undefined,
-      duration: 0,
-      location: 'Faena Calama',
-      activity: 'Visita en progreso',
-      amount: 0,
-      status: 'in-progress',
-      gpsVerified: true
-    }
-  ]);
+  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>(MOCK_TIME_ENTRIES);
+  const [isLoadingEntries, setIsLoadingEntries] = useState(true);
+
+  const canPersist = Boolean(isSupabaseConfigured && clients.length > 0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadEntries = async () => {
+      setIsLoadingEntries(true);
+      if (!canPersist) {
+        if (!cancelled) setTimeEntries(MOCK_TIME_ENTRIES);
+        if (!cancelled) setIsLoadingEntries(false);
+        return;
+      }
+      try {
+        const data = await fetchTimeEntries(clients);
+        if (!cancelled) setTimeEntries(data);
+      } catch (err: any) {
+        console.warn('No se pudo cargar horas desde Supabase:', err.message);
+        if (!cancelled) setTimeEntries(MOCK_TIME_ENTRIES);
+      } finally {
+        if (!cancelled) setIsLoadingEntries(false);
+      }
+    };
+    loadEntries();
+    return () => { cancelled = true; };
+  }, [clients, canPersist]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-CL', {
@@ -116,7 +135,7 @@ export function HoursTracking({ clients }: HoursTrackingProps) {
 
   // Agrupar por cliente
   const hoursByClient = clients.map(client => {
-    const clientEntries = completedEntries.filter(e => e.clientId === client.id);
+    const clientEntries = completedEntries.filter(e => e.companyId === client.id);
     const hours = clientEntries.reduce((sum, e) => sum + e.duration, 0);
     const amount = clientEntries.reduce((sum, e) => sum + e.amount, 0);
     return {
@@ -126,28 +145,70 @@ export function HoursTracking({ clients }: HoursTrackingProps) {
     };
   }).filter(c => c.hours > 0);
 
-  const handleStopTimer = (entryId: string) => {
-    toast.success('Registro de tiempo finalizado');
-    setActiveEntry(null);
+  const handleStopTimer = async (entryId: string) => {
+    const entry = timeEntries.find(e => e.id === entryId);
+    if (!entry) return;
+
+    const now = new Date();
+    const endTime = now.toTimeString().slice(0, 5);
+    const [startH, startM] = entry.startTime.split(':').map(Number);
+    const durationHours = Math.max(0, Math.round(((now.getHours() * 60 + now.getMinutes()) - (startH * 60 + startM)) / 60 * 100) / 100);
+    const client = clients.find(c => c.id === entry.companyId);
+    const rate = entry.hourlyRate ?? client?.hourlyRate ?? 0;
+    const amount = Math.round(durationHours * rate);
+
+    try {
+      if (canPersist) {
+        const updated = await updateTimeEntry(
+          entryId,
+          { endTime, duration: durationHours, amount, status: 'completed' },
+          entry.clientName
+        );
+        setTimeEntries(timeEntries.map(e => (e.id === entryId ? updated : e)));
+      } else {
+        setTimeEntries(timeEntries.map(e =>
+          e.id === entryId ? { ...e, endTime, duration: durationHours, amount, status: 'completed' as const } : e
+        ));
+      }
+      setActiveEntry(null);
+      toast.success('Registro de tiempo finalizado');
+    } catch (err: any) {
+      toast.error('Error al finalizar el registro', { description: err.message });
+    }
   };
 
-  const handleSaveHours = (data: any) => {
-    if (editingEntry) {
-      // Editar entrada existente
-      setTimeEntries(timeEntries.map(entry => 
-        entry.id === editingEntry.id 
-          ? { ...entry, ...data, id: editingEntry.id } 
-          : entry
-      ));
-      toast.success('✅ Registro actualizado exitosamente');
-    } else {
-      // Crear nueva entrada
-      const newEntry: TimeEntry = {
-        id: `TIME-${Date.now()}`,
-        ...data
-      };
-      setTimeEntries([newEntry, ...timeEntries]);
-      toast.success('✅ Registro creado exitosamente');
+  const handleSaveHours = async (data: any) => {
+    const client = clients.find(c => c.id === data.companyId);
+    if (!client) return;
+
+    try {
+      if (editingEntry) {
+        if (canPersist) {
+          const updated = await updateTimeEntry(editingEntry.id, data, client.name);
+          setTimeEntries(timeEntries.map(entry => (entry.id === editingEntry.id ? updated : entry)));
+        } else {
+          setTimeEntries(timeEntries.map(entry =>
+            entry.id === editingEntry.id ? { ...entry, ...data, id: editingEntry.id } : entry
+          ));
+        }
+        toast.success('✅ Registro actualizado exitosamente');
+      } else {
+        if (canPersist) {
+          const created = await createTimeEntry(data, client.name);
+          setTimeEntries([created, ...timeEntries]);
+        } else {
+          const newEntry: TimeEntry = {
+            id: `TIME-${Date.now()}`,
+            clientName: client.name,
+            ...data
+          };
+          setTimeEntries([newEntry, ...timeEntries]);
+        }
+        toast.success('✅ Registro creado exitosamente');
+      }
+    } catch (err: any) {
+      toast.error('Error al guardar el registro', { description: err.message });
+      return;
     }
     setEditingEntry(null);
   };
@@ -242,7 +303,14 @@ export function HoursTracking({ clients }: HoursTrackingProps) {
           Registros de Tiempo ({timeEntries.length})
         </h3>
 
-        {timeEntries.map(entry => (
+        {isLoadingEntries && (
+          <div className="flex items-center justify-center py-8 text-zinc-400">
+            <Clock className="w-5 h-5 mr-2 animate-spin" />
+            Cargando registros...
+          </div>
+        )}
+
+        {!isLoadingEntries && timeEntries.map(entry => (
           <Card
             key={entry.id}
             className={`border-zinc-200 dark:border-zinc-700 p-4 ${

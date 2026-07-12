@@ -22,7 +22,7 @@ interface AddHoursModalProps {
   onSave: (data: any) => void;
   editingEntry?: {
     id: string;
-    clientId: string;
+    companyId: string;
     date: string;
     startTime: string;
     endTime?: string;
@@ -48,16 +48,16 @@ export function AddHoursModal({ isOpen, onClose, clients, onSave, editingEntry =
   // Cargar datos si estamos editando
   useEffect(() => {
     if (editingEntry) {
-      setSelectedClient(editingEntry.clientId);
+      setSelectedClient(editingEntry.companyId);
       setDate(editingEntry.date);
       setStartTime(editingEntry.startTime || '');
       setEndTime(editingEntry.endTime || '');
       setHours(editingEntry.duration.toString());
       setActivity(editingEntry.activity);
       setLocation(editingEntry.location || '');
-      
+
       // Si tiene tarifa custom, activar el checkbox
-      const clientData = clients.find(c => c.id === editingEntry.clientId);
+      const clientData = clients.find(c => c.id === editingEntry.companyId);
       if (clientData && editingEntry.hourlyRate && editingEntry.hourlyRate !== clientData.hourlyRate) {
         setUseCustomRate(true);
         setCustomRate(editingEntry.hourlyRate.toString());
@@ -115,7 +115,7 @@ export function AddHoursModal({ isOpen, onClose, clients, onSave, editingEntry =
     const totalAmount = calculateAmount();
 
     onSave({
-      clientId: selectedClient,
+      companyId: selectedClient,
       clientName: client.name,
       date,
       startTime,
