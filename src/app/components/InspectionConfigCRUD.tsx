@@ -6,7 +6,14 @@
  * para inspecciones de cada empresa
  */
 
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import {
+  fetchInspectionElementsByCompany,
+  createInspectionElement,
+  updateInspectionElement,
+  deleteInspectionElement as deleteInspectionElementInDB,
+} from '@/app/services/inspectionConfigService';
+import { isSupabaseConfigured } from '@/app/services/supabase';
 import {
   ArrowLeft,
   Plus,
@@ -58,142 +65,167 @@ interface InspectionConfigCRUDProps {
   selectedCompanyName?: string;
 }
 
+const MOCK_ELEMENTS: InspectionElement[] = [
+  // Sectores
+  {
+    id: 'sector-1',
+    companyId: 'empresa-1',
+    companyName: 'Constructora Los Andes',
+    type: 'sector',
+    name: 'Obra Gruesa - Piso 3',
+    description: 'Zona de construcción de estructura',
+    risk: 'alto',
+    createdAt: '2026-01-10',
+    updatedAt: '2026-01-20'
+  },
+  {
+    id: 'sector-2',
+    companyId: 'empresa-1',
+    companyName: 'Constructora Los Andes',
+    type: 'sector',
+    name: 'Bodega de Materiales',
+    description: 'Almacenamiento de insumos',
+    risk: 'medio',
+    createdAt: '2026-01-10',
+    updatedAt: '2026-01-20'
+  },
+  {
+    id: 'sector-3',
+    companyId: 'empresa-1',
+    companyName: 'Constructora Los Andes',
+    type: 'sector',
+    name: 'Oficinas Administrativas',
+    description: 'Área de gestión y administración',
+    risk: 'bajo',
+    createdAt: '2026-01-12',
+    updatedAt: '2026-01-20'
+  },
+  // Activos
+  {
+    id: 'activo-1',
+    companyId: 'empresa-1',
+    companyName: 'Constructora Los Andes',
+    type: 'activo',
+    name: 'Grúa Torre GT-450',
+    description: 'Grúa principal obra',
+    risk: 'critico',
+    createdAt: '2026-01-10',
+    updatedAt: '2026-01-22'
+  },
+  {
+    id: 'activo-2',
+    companyId: 'empresa-1',
+    companyName: 'Constructora Los Andes',
+    type: 'activo',
+    name: 'Andamio Metálico Principal',
+    description: 'Andamio de fachada norte',
+    risk: 'alto',
+    createdAt: '2026-01-11',
+    updatedAt: '2026-01-22'
+  },
+  {
+    id: 'activo-3',
+    companyId: 'empresa-1',
+    companyName: 'Constructora Los Andes',
+    type: 'activo',
+    name: 'Betonera Industrial',
+    description: 'Mezcladora de hormigón',
+    risk: 'medio',
+    createdAt: '2026-01-12',
+    updatedAt: '2026-01-20'
+  },
+  // Checkpoints
+  {
+    id: 'check-1',
+    companyId: 'empresa-1',
+    companyName: 'Constructora Los Andes',
+    type: 'checkpoint',
+    name: 'Estado de Cables de Acero',
+    description: 'Verificar desgaste y oxidación',
+    parentId: 'activo-1',
+    risk: 'critico',
+    createdAt: '2026-01-15',
+    updatedAt: '2026-01-20'
+  },
+  {
+    id: 'check-2',
+    companyId: 'empresa-1',
+    companyName: 'Constructora Los Andes',
+    type: 'checkpoint',
+    name: 'Señalización de Zona',
+    description: 'Verificar presencia de letreros',
+    parentId: 'sector-1',
+    risk: 'alto',
+    createdAt: '2026-01-15',
+    updatedAt: '2026-01-20'
+  },
+  {
+    id: 'check-3',
+    companyId: 'empresa-1',
+    companyName: 'Constructora Los Andes',
+    type: 'checkpoint',
+    name: 'Orden y Aseo',
+    description: 'Verificar limpieza general',
+    parentId: 'sector-2',
+    risk: 'medio',
+    createdAt: '2026-01-16',
+    updatedAt: '2026-01-20'
+  },
+  // Minera del Norte
+  {
+    id: 'sector-m1',
+    companyId: 'empresa-2',
+    companyName: 'Minera del Norte',
+    type: 'sector',
+    name: 'Frente de Extracción Norte',
+    description: 'Zona activa de extracción mineral',
+    risk: 'critico',
+    createdAt: '2026-01-08',
+    updatedAt: '2026-01-20'
+  },
+  {
+    id: 'activo-m1',
+    companyId: 'empresa-2',
+    companyName: 'Minera del Norte',
+    type: 'activo',
+    name: 'Camión Minero CAT 797',
+    description: 'Camión de transporte de mineral',
+    risk: 'alto',
+    createdAt: '2026-01-09',
+    updatedAt: '2026-01-22'
+  }
+];
+
 export function InspectionConfigCRUD({
   onBack,
   selectedCompanyId,
   selectedCompanyName
 }: InspectionConfigCRUDProps) {
-  // Estado de elementos (en producción vendría de Supabase)
-  const [elements, setElements] = useState<InspectionElement[]>([
-    // Sectores
-    {
-      id: 'sector-1',
-      companyId: 'empresa-1',
-      companyName: 'Constructora Los Andes',
-      type: 'sector',
-      name: 'Obra Gruesa - Piso 3',
-      description: 'Zona de construcción de estructura',
-      risk: 'alto',
-      createdAt: '2026-01-10',
-      updatedAt: '2026-01-20'
-    },
-    {
-      id: 'sector-2',
-      companyId: 'empresa-1',
-      companyName: 'Constructora Los Andes',
-      type: 'sector',
-      name: 'Bodega de Materiales',
-      description: 'Almacenamiento de insumos',
-      risk: 'medio',
-      createdAt: '2026-01-10',
-      updatedAt: '2026-01-20'
-    },
-    {
-      id: 'sector-3',
-      companyId: 'empresa-1',
-      companyName: 'Constructora Los Andes',
-      type: 'sector',
-      name: 'Oficinas Administrativas',
-      description: 'Área de gestión y administración',
-      risk: 'bajo',
-      createdAt: '2026-01-12',
-      updatedAt: '2026-01-20'
-    },
-    // Activos
-    {
-      id: 'activo-1',
-      companyId: 'empresa-1',
-      companyName: 'Constructora Los Andes',
-      type: 'activo',
-      name: 'Grúa Torre GT-450',
-      description: 'Grúa principal obra',
-      risk: 'critico',
-      createdAt: '2026-01-10',
-      updatedAt: '2026-01-22'
-    },
-    {
-      id: 'activo-2',
-      companyId: 'empresa-1',
-      companyName: 'Constructora Los Andes',
-      type: 'activo',
-      name: 'Andamio Metálico Principal',
-      description: 'Andamio de fachada norte',
-      risk: 'alto',
-      createdAt: '2026-01-11',
-      updatedAt: '2026-01-22'
-    },
-    {
-      id: 'activo-3',
-      companyId: 'empresa-1',
-      companyName: 'Constructora Los Andes',
-      type: 'activo',
-      name: 'Betonera Industrial',
-      description: 'Mezcladora de hormigón',
-      risk: 'medio',
-      createdAt: '2026-01-12',
-      updatedAt: '2026-01-20'
-    },
-    // Checkpoints
-    {
-      id: 'check-1',
-      companyId: 'empresa-1',
-      companyName: 'Constructora Los Andes',
-      type: 'checkpoint',
-      name: 'Estado de Cables de Acero',
-      description: 'Verificar desgaste y oxidación',
-      parentId: 'activo-1',
-      risk: 'critico',
-      createdAt: '2026-01-15',
-      updatedAt: '2026-01-20'
-    },
-    {
-      id: 'check-2',
-      companyId: 'empresa-1',
-      companyName: 'Constructora Los Andes',
-      type: 'checkpoint',
-      name: 'Señalización de Zona',
-      description: 'Verificar presencia de letreros',
-      parentId: 'sector-1',
-      risk: 'alto',
-      createdAt: '2026-01-15',
-      updatedAt: '2026-01-20'
-    },
-    {
-      id: 'check-3',
-      companyId: 'empresa-1',
-      companyName: 'Constructora Los Andes',
-      type: 'checkpoint',
-      name: 'Orden y Aseo',
-      description: 'Verificar limpieza general',
-      parentId: 'sector-2',
-      risk: 'medio',
-      createdAt: '2026-01-16',
-      updatedAt: '2026-01-20'
-    },
-    // Minera del Norte
-    {
-      id: 'sector-m1',
-      companyId: 'empresa-2',
-      companyName: 'Minera del Norte',
-      type: 'sector',
-      name: 'Frente de Extracción Norte',
-      description: 'Zona activa de extracción mineral',
-      risk: 'critico',
-      createdAt: '2026-01-08',
-      updatedAt: '2026-01-20'
-    },
-    {
-      id: 'activo-m1',
-      companyId: 'empresa-2',
-      companyName: 'Minera del Norte',
-      type: 'activo',
-      name: 'Camión Minero CAT 797',
-      description: 'Camión de transporte de mineral',
-      risk: 'alto',
-      createdAt: '2026-01-09',
-      updatedAt: '2026-01-22'
-    }
-  ]);
+  const [elements, setElements] = useState<InspectionElement[]>([]);
+  const [isLoadingElements, setIsLoadingElements] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadElements = async () => {
+      setIsLoadingElements(true);
+      if (!isSupabaseConfigured || !selectedCompanyId) {
+        if (!cancelled) setElements(MOCK_ELEMENTS);
+        if (!cancelled) setIsLoadingElements(false);
+        return;
+      }
+      try {
+        const data = await fetchInspectionElementsByCompany(selectedCompanyId, selectedCompanyName || '');
+        if (!cancelled) setElements(data);
+      } catch (err: any) {
+        console.warn('No se pudo cargar la configuración de inspecciones desde Supabase:', err.message);
+        if (!cancelled) setElements(MOCK_ELEMENTS);
+      } finally {
+        if (!cancelled) setIsLoadingElements(false);
+      }
+    };
+    loadElements();
+    return () => { cancelled = true; };
+  }, [selectedCompanyId, selectedCompanyName]);
 
   const [activeTab, setActiveTab] = useState<'sector' | 'activo' | 'checkpoint'>('sector');
   const [isCreating, setIsCreating] = useState(false);
@@ -267,7 +299,7 @@ export function InspectionConfigCRUD({
     });
   };
 
-  const handleDelete = (elementId: string) => {
+  const handleDelete = async (elementId: string) => {
     const element = elements.find(el => el.id === elementId);
     if (!element) return;
 
@@ -278,12 +310,19 @@ export function InspectionConfigCRUD({
       return;
     }
 
-    if (confirm(`¿Estás seguro de eliminar este ${element.type}?`)) {
+    if (!confirm(`¿Estás seguro de eliminar este ${element.type}?`)) return;
+
+    try {
+      if (selectedCompanyId && isSupabaseConfigured) {
+        await deleteInspectionElementInDB(elementId);
+      }
       setElements(prev => prev.filter(el => el.id !== elementId));
+    } catch (err: any) {
+      alert(`Error al eliminar: ${err.message}`);
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.name.trim()) {
       alert('Debes ingresar un nombre');
       return;
@@ -294,35 +333,57 @@ export function InspectionConfigCRUD({
       return;
     }
 
-    if (editingId) {
-      // Editar elemento existente
-      setElements(prev => prev.map(el =>
-        el.id === editingId
-          ? {
-              ...el,
-              name: formData.name,
-              description: formData.description,
-              risk: formData.risk,
-              parentId: activeTab === 'checkpoint' ? formData.parentId : undefined,
-              updatedAt: new Date().toISOString().split('T')[0]
-            }
-          : el
-      ));
-    } else {
-      // Crear nuevo elemento
-      const newElement: InspectionElement = {
-        id: `${activeTab}-${Date.now()}`,
-        companyId: selectedCompanyId || 'empresa-1',
-        companyName: selectedCompanyName || 'Empresa sin especificar',
-        type: activeTab,
-        name: formData.name,
-        description: formData.description,
-        risk: formData.risk,
-        parentId: activeTab === 'checkpoint' ? formData.parentId : undefined,
-        createdAt: new Date().toISOString().split('T')[0],
-        updatedAt: new Date().toISOString().split('T')[0]
-      };
-      setElements(prev => [...prev, newElement]);
+    const canPersist = Boolean(selectedCompanyId && isSupabaseConfigured);
+    const elementInput = {
+      type: activeTab,
+      name: formData.name,
+      description: formData.description,
+      risk: formData.risk,
+      parentId: activeTab === 'checkpoint' ? formData.parentId : undefined,
+    };
+
+    try {
+      if (editingId) {
+        if (canPersist) {
+          const updated = await updateInspectionElement(editingId, selectedCompanyName || '', elementInput);
+          setElements(prev => prev.map(el => (el.id === editingId ? updated : el)));
+        } else {
+          setElements(prev => prev.map(el =>
+            el.id === editingId
+              ? {
+                  ...el,
+                  name: formData.name,
+                  description: formData.description,
+                  risk: formData.risk,
+                  parentId: activeTab === 'checkpoint' ? formData.parentId : undefined,
+                  updatedAt: new Date().toISOString().split('T')[0]
+                }
+              : el
+          ));
+        }
+      } else {
+        if (canPersist) {
+          const created = await createInspectionElement(selectedCompanyId!, selectedCompanyName || '', elementInput);
+          setElements(prev => [...prev, created]);
+        } else {
+          const newElement: InspectionElement = {
+            id: `${activeTab}-${Date.now()}`,
+            companyId: selectedCompanyId || 'empresa-1',
+            companyName: selectedCompanyName || 'Empresa sin especificar',
+            type: activeTab,
+            name: formData.name,
+            description: formData.description,
+            risk: formData.risk,
+            parentId: activeTab === 'checkpoint' ? formData.parentId : undefined,
+            createdAt: new Date().toISOString().split('T')[0],
+            updatedAt: new Date().toISOString().split('T')[0]
+          };
+          setElements(prev => [...prev, newElement]);
+        }
+      }
+    } catch (err: any) {
+      alert(`Error al guardar: ${err.message}`);
+      return;
     }
 
     setIsCreating(false);
@@ -515,7 +576,13 @@ export function InspectionConfigCRUD({
         )}
 
         {/* Vista de Lista */}
-        {!isCreating && (
+        {!isCreating && isLoadingElements && (
+          <div className="flex items-center justify-center py-12 text-white/60">
+            <ClipboardList className="size-5 mr-2 animate-spin" />
+            Cargando configuración...
+          </div>
+        )}
+        {!isCreating && !isLoadingElements && (
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
             <TabsContent value={activeTab} className="mt-0 space-y-3">
               {filteredElements.length === 0 ? (

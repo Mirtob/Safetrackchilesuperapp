@@ -6,7 +6,14 @@
  * según las políticas de cada empresa cliente
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import {
+  fetchSafetyKitsByCompany,
+  createSafetyKit,
+  updateSafetyKit,
+  deleteSafetyKit as deleteSafetyKitInDB,
+} from '@/app/services/safetyKitsService';
+import { isSupabaseConfigured } from '@/app/services/supabase';
 import {
   ArrowLeft,
   Plus,
@@ -56,6 +63,40 @@ interface SafetyKitCRUDProps {
   selectedCompanyId?: string;
   selectedCompanyName?: string;
 }
+
+// Kits de demostración: se usan solo si Supabase no está configurado o no hay empresa seleccionada
+const MOCK_KITS: SafetyKit[] = [
+  {
+    id: 'kit-1',
+    companyId: 'empresa-1',
+    companyName: 'Constructora Los Andes',
+    kitName: 'Kit Básico Constructor',
+    description: 'Kit estándar para trabajadores de obra',
+    eppItems: ['casco-obra', 'lentes-seg', 'guantes-cuero', 'zapatos-seg', 'chaleco-ref', 'protector-sol'],
+    createdAt: '2026-01-15',
+    updatedAt: '2026-01-20'
+  },
+  {
+    id: 'kit-2',
+    companyId: 'empresa-1',
+    companyName: 'Constructora Los Andes',
+    kitName: 'Kit Electricista',
+    description: 'Kit especializado para trabajos eléctricos',
+    eppItems: ['casco-diel', 'lentes-seg', 'guantes-diel', 'botas-diel', 'chaleco-ref'],
+    createdAt: '2026-01-18',
+    updatedAt: '2026-01-20'
+  },
+  {
+    id: 'kit-3',
+    companyId: 'empresa-2',
+    companyName: 'Minera del Norte',
+    kitName: 'Kit Minero Estándar',
+    description: 'Kit completo para operaciones mineras',
+    eppItems: ['casco-obra', 'lentes-seg', 'guantes-cuero', 'botas-minera', 'chaleco-ref', 'respirador-media', 'tapones-aud', 'protector-sol'],
+    createdAt: '2026-01-10',
+    updatedAt: '2026-01-22'
+  }
+];
 
 // Catálogo completo de EPPs disponibles
 const EPP_CATALOG: EPPItem[] = [
@@ -107,39 +148,31 @@ export function SafetyKitCRUD({
   selectedCompanyId,
   selectedCompanyName
 }: SafetyKitCRUDProps) {
-  // Estado de kits (en producción vendría de Supabase)
-  const [kits, setKits] = useState<SafetyKit[]>([
-    {
-      id: 'kit-1',
-      companyId: 'empresa-1',
-      companyName: 'Constructora Los Andes',
-      kitName: 'Kit Básico Constructor',
-      description: 'Kit estándar para trabajadores de obra',
-      eppItems: ['casco-obra', 'lentes-seg', 'guantes-cuero', 'zapatos-seg', 'chaleco-ref', 'protector-sol'],
-      createdAt: '2026-01-15',
-      updatedAt: '2026-01-20'
-    },
-    {
-      id: 'kit-2',
-      companyId: 'empresa-1',
-      companyName: 'Constructora Los Andes',
-      kitName: 'Kit Electricista',
-      description: 'Kit especializado para trabajos eléctricos',
-      eppItems: ['casco-diel', 'lentes-seg', 'guantes-diel', 'botas-diel', 'chaleco-ref'],
-      createdAt: '2026-01-18',
-      updatedAt: '2026-01-20'
-    },
-    {
-      id: 'kit-3',
-      companyId: 'empresa-2',
-      companyName: 'Minera del Norte',
-      kitName: 'Kit Minero Estándar',
-      description: 'Kit completo para operaciones mineras',
-      eppItems: ['casco-obra', 'lentes-seg', 'guantes-cuero', 'botas-minera', 'chaleco-ref', 'respirador-media', 'tapones-aud', 'protector-sol'],
-      createdAt: '2026-01-10',
-      updatedAt: '2026-01-22'
-    }
-  ]);
+  const [kits, setKits] = useState<SafetyKit[]>([]);
+  const [isLoadingKits, setIsLoadingKits] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadKits = async () => {
+      setIsLoadingKits(true);
+      if (!isSupabaseConfigured || !selectedCompanyId) {
+        if (!cancelled) setKits(MOCK_KITS);
+        if (!cancelled) setIsLoadingKits(false);
+        return;
+      }
+      try {
+        const data = await fetchSafetyKitsByCompany(selectedCompanyId, selectedCompanyName || '');
+        if (!cancelled) setKits(data);
+      } catch (err: any) {
+        console.warn('No se pudo cargar kits desde Supabase:', err.message);
+        if (!cancelled) setKits(MOCK_KITS);
+      } finally {
+        if (!cancelled) setIsLoadingKits(false);
+      }
+    };
+    loadKits();
+    return () => { cancelled = true; };
+  }, [selectedCompanyId, selectedCompanyName]);
 
   const [isCreating, setIsCreating] = useState(false);
   const [editingKitId, setEditingKitId] = useState<string | null>(null);
@@ -192,9 +225,15 @@ export function SafetyKitCRUD({
     });
   };
 
-  const handleDelete = (kitId: string) => {
-    if (confirm('¿Estás seguro de eliminar este kit de seguridad?')) {
+  const handleDelete = async (kitId: string) => {
+    if (!confirm('¿Estás seguro de eliminar este kit de seguridad?')) return;
+    try {
+      if (selectedCompanyId && isSupabaseConfigured) {
+        await deleteSafetyKitInDB(kitId);
+      }
       setKits(prev => prev.filter(k => k.id !== kitId));
+    } catch (err: any) {
+      alert(`Error al eliminar el kit: ${err.message}`);
     }
   };
 
@@ -207,7 +246,7 @@ export function SafetyKitCRUD({
     }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.kitName.trim()) {
       alert('Debes ingresar un nombre para el kit');
       return;
@@ -218,32 +257,52 @@ export function SafetyKitCRUD({
       return;
     }
 
-    if (editingKitId) {
-      // Editar kit existente
-      setKits(prev => prev.map(kit =>
-        kit.id === editingKitId
-          ? {
-              ...kit,
-              kitName: formData.kitName,
-              description: formData.description,
-              eppItems: formData.selectedEPPs,
-              updatedAt: new Date().toISOString().split('T')[0]
-            }
-          : kit
-      ));
-    } else {
-      // Crear nuevo kit
-      const newKit: SafetyKit = {
-        id: `kit-${Date.now()}`,
-        companyId: selectedCompanyId || 'empresa-1',
-        companyName: selectedCompanyName || 'Empresa sin especificar',
-        kitName: formData.kitName,
-        description: formData.description,
-        eppItems: formData.selectedEPPs,
-        createdAt: new Date().toISOString().split('T')[0],
-        updatedAt: new Date().toISOString().split('T')[0]
-      };
-      setKits(prev => [...prev, newKit]);
+    const canPersist = Boolean(selectedCompanyId && isSupabaseConfigured);
+    const kitInput = {
+      kitName: formData.kitName,
+      description: formData.description,
+      eppItems: formData.selectedEPPs,
+    };
+
+    try {
+      if (editingKitId) {
+        if (canPersist) {
+          const updated = await updateSafetyKit(editingKitId, selectedCompanyName || '', kitInput);
+          setKits(prev => prev.map(kit => (kit.id === editingKitId ? updated : kit)));
+        } else {
+          setKits(prev => prev.map(kit =>
+            kit.id === editingKitId
+              ? {
+                  ...kit,
+                  kitName: formData.kitName,
+                  description: formData.description,
+                  eppItems: formData.selectedEPPs,
+                  updatedAt: new Date().toISOString().split('T')[0]
+                }
+              : kit
+          ));
+        }
+      } else {
+        if (canPersist) {
+          const created = await createSafetyKit(selectedCompanyId!, selectedCompanyName || '', kitInput);
+          setKits(prev => [...prev, created]);
+        } else {
+          const newKit: SafetyKit = {
+            id: `kit-${Date.now()}`,
+            companyId: selectedCompanyId || 'empresa-1',
+            companyName: selectedCompanyName || 'Empresa sin especificar',
+            kitName: formData.kitName,
+            description: formData.description,
+            eppItems: formData.selectedEPPs,
+            createdAt: new Date().toISOString().split('T')[0],
+            updatedAt: new Date().toISOString().split('T')[0]
+          };
+          setKits(prev => [...prev, newKit]);
+        }
+      }
+    } catch (err: any) {
+      alert(`Error al guardar el kit: ${err.message}`);
+      return;
     }
 
     setIsCreating(false);
@@ -399,7 +458,13 @@ export function SafetyKitCRUD({
         )}
 
         {/* Vista de Lista */}
-        {!isCreating && (
+        {!isCreating && isLoadingKits && (
+          <div className="flex items-center justify-center py-12 text-white/60">
+            <Package className="size-5 mr-2 animate-spin" />
+            Cargando kits...
+          </div>
+        )}
+        {!isCreating && !isLoadingKits && (
           <>
             {filteredKits.length === 0 ? (
               <Card className="bg-white/5 border-white/10 p-12 text-center">

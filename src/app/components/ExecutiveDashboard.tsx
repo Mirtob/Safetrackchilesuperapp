@@ -44,15 +44,17 @@ interface ExecutiveDashboardProps {
   onViewFinancialImpact?: () => void;
   onViewBranchRisk?: () => void;
   onViewAPIConfig?: () => void;
+  companyId?: string;
 }
 
 type TimeRange = 'week' | 'month' | 'year';
 
-export function ExecutiveDashboard({ 
-  onBack, 
+export function ExecutiveDashboard({
+  onBack,
   onViewFinancialImpact,
   onViewBranchRisk,
-  onViewAPIConfig 
+  onViewAPIConfig,
+  companyId
 }: ExecutiveDashboardProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>('month');
 
@@ -456,6 +458,7 @@ export function ExecutiveDashboard({
         <div className="bg-white/5 border-white/10 backdrop-blur-sm rounded-xl p-6">
           <IncidentDashboardWidget
             compact={false}
+            companyId={companyId}
             onViewDetails={(id) => {
               toast.info(`Abriendo detalles del incidente ${id}`);
             }}

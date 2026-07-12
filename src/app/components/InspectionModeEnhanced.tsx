@@ -1,5 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import { fetchComplianceDocuments, createInspectorAccessLink } from '@/app/services/safetyTalksService';
+import { isSupabaseConfigured } from '@/app/services/supabase';
 import { 
   ArrowLeft, 
   QrCode, 
@@ -33,6 +35,7 @@ import { toast } from 'sonner';
 
 interface InspectionModeEnhancedProps {
   onBack: () => void;
+  companyId?: string;
 }
 
 interface DocumentItem {
@@ -191,13 +194,41 @@ const MOCK_DOCUMENTS: DocumentItem[] = [
   }
 ];
 
-export function InspectionModeEnhanced({ onBack }: InspectionModeEnhancedProps) {
+export function InspectionModeEnhanced({ onBack, companyId }: InspectionModeEnhancedProps) {
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('month');
   const [showPeriodSelector, setShowPeriodSelector] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [showDocumentList, setShowDocumentList] = useState(false);
   const [generatedPackageUrl, setGeneratedPackageUrl] = useState<string>('');
   const qrRef = useRef<HTMLDivElement>(null);
+
+  const [documents, setDocuments] = useState<DocumentItem[]>(MOCK_DOCUMENTS);
+  const [isLoadingDocuments, setIsLoadingDocuments] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadDocuments = async () => {
+      setIsLoadingDocuments(true);
+      if (!isSupabaseConfigured || !companyId) {
+        if (!cancelled) setDocuments(MOCK_DOCUMENTS);
+        if (!cancelled) setIsLoadingDocuments(false);
+        return;
+      }
+      try {
+        const oneYearAgo = new Date();
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+        const data = await fetchComplianceDocuments(companyId, oneYearAgo.toISOString().split('T')[0]);
+        if (!cancelled) setDocuments(data);
+      } catch (err: any) {
+        console.warn('No se pudo cargar documentos de cumplimiento desde Supabase:', err.message);
+        if (!cancelled) setDocuments(MOCK_DOCUMENTS);
+      } finally {
+        if (!cancelled) setIsLoadingDocuments(false);
+      }
+    };
+    loadDocuments();
+    return () => { cancelled = true; };
+  }, [companyId]);
 
   const getPeriodLabel = (period: Period): string => {
     switch (period) {
@@ -231,8 +262,8 @@ export function InspectionModeEnhanced({ onBack }: InspectionModeEnhancedProps) 
 
   const getFilteredDocuments = (): DocumentItem[] => {
     const { from } = getPeriodDates(selectedPeriod);
-    
-    return MOCK_DOCUMENTS.filter(doc => {
+
+    return documents.filter(doc => {
       const docDate = new Date(doc.date);
       return docDate >= from;
     });
@@ -244,7 +275,7 @@ export function InspectionModeEnhanced({ onBack }: InspectionModeEnhancedProps) 
   const unsignedDocs = filteredDocs.filter(d => !d.hasSigned);
   const canGenerate = unsignedDocs.length === 0;
 
-  const handleGeneratePackage = () => {
+  const handleGeneratePackage = async () => {
     if (!canGenerate) {
       toast.error('❌ Documentos sin firmar', {
         description: `Hay ${unsignedDocs.length} documento(s) pendiente(s) de firma. Completa las firmas antes de generar el paquete.`,
@@ -253,18 +284,27 @@ export function InspectionModeEnhanced({ onBack }: InspectionModeEnhancedProps) 
       return;
     }
 
-    // Generar token único para el paquete
-    const token = `INSP-PKG-${Date.now().toString(36).toUpperCase()}`;
     const baseUrl = window.location.origin;
-    const packageUrl = `${baseUrl}/fiscalizacion/${token}`;
 
-    setGeneratedPackageUrl(packageUrl);
-    setShowQRModal(true);
+    try {
+      let token: string;
+      if (companyId && isSupabaseConfigured) {
+        const link = await createInspectorAccessLink(companyId, getPeriodLabel(selectedPeriod), totalDocs);
+        token = link.token;
+      } else {
+        token = `INSP-PKG-${Date.now().toString(36).toUpperCase()}`;
+      }
 
-    toast.success('✅ Paquete generado', {
-      description: 'QR y enlace creados exitosamente',
-      duration: 3000
-    });
+      setGeneratedPackageUrl(`${baseUrl}/fiscalizacion/${token}`);
+      setShowQRModal(true);
+
+      toast.success('✅ Paquete generado', {
+        description: 'QR y enlace creados exitosamente',
+        duration: 3000
+      });
+    } catch (err: any) {
+      toast.error('Error al generar el paquete', { description: err.message });
+    }
   };
 
   const handleDownloadPDF = () => {
@@ -478,6 +518,13 @@ export function InspectionModeEnhanced({ onBack }: InspectionModeEnhancedProps) 
             </button>
           )}
         </Card>
+
+        {isLoadingDocuments && (
+          <div className="flex items-center justify-center py-8 text-slate-400">
+            <Clock className="w-5 h-5 mr-2 animate-spin" />
+            Cargando documentos...
+          </div>
+        )}
 
         {/* Resumen de Documentos */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

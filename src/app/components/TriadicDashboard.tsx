@@ -35,6 +35,7 @@ interface TriadicDashboardProps {
   onNavigate: (view: string, actionId?: string) => void;
   isOnline: boolean;
   pendingItems?: number;
+  companyId?: string;
 }
 
 type DashboardMode = 'field' | 'office' | 'strategic';
@@ -54,7 +55,7 @@ interface QuickAction {
   };
 }
 
-export function TriadicDashboard({ onBack, onNavigate, isOnline, pendingItems = 0 }: TriadicDashboardProps) {
+export function TriadicDashboard({ onBack, onNavigate, isOnline, pendingItems = 0, companyId }: TriadicDashboardProps) {
   const [activeMode, setActiveMode] = useState<DashboardMode>('field');
 
   // Acciones del Modo Operativo (Terreno)
@@ -410,6 +411,7 @@ export function TriadicDashboard({ onBack, onNavigate, isOnline, pendingItems = 
         <div className="mt-6">
           <IncidentDashboardWidget
             compact={activeMode === 'field'}
+            companyId={companyId}
             onViewDetails={(id) => {
               onNavigate('incident-followup', id);
             }}

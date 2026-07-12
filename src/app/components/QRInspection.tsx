@@ -1,5 +1,8 @@
-import { useState, useRef } from 'react';
-import { 
+import { useState, useRef, useEffect } from 'react';
+import { fetchAssetById, Asset } from '@/app/services/assetsService';
+import { createInspection } from '@/app/services/inspectionsService';
+import { isSupabaseConfigured } from '@/app/services/supabase';
+import {
   ArrowLeft, 
   Camera,
   CheckCircle2,
@@ -27,6 +30,8 @@ import { toast } from 'sonner';
 interface QRInspectionProps {
   onBack: () => void;
   assetId?: string;
+  companyId?: string;
+  branchId?: string;
 }
 
 interface InspectionItem {
@@ -35,33 +40,86 @@ interface InspectionItem {
   status: 'pass' | 'fail' | 'pending';
 }
 
-export function QRInspection({ onBack, assetId }: QRInspectionProps) {
+const MOCK_ASSET = {
+  id: 'AST-001',
+  code: 'EXT-MAI-001',
+  name: 'Extintor PQS 6kg - Oficinas',
+  category: 'Extintor',
+  location: 'Oficina Administrativa - Piso 2',
+  lastInspection: '2025-12-15',
+  nextMaintenance: '2026-12-15',
+  status: 'compliant' as const,
+  certificationNumber: 'CERT-2025-12345',
+  supplier: 'Extintores Chile S.A.',
+  specifications: {
+    capacity: '6 kg',
+    type: 'Polvo Químico Seco (PQS)',
+    pressure: '195 PSI',
+    manufacturer: 'Amerex',
+    yearOfManufacture: '2024'
+  }
+};
+
+const assetToDisplay = (asset: Asset) => ({
+  id: asset.id,
+  code: asset.code,
+  name: asset.name,
+  category: asset.category,
+  location: asset.location || '—',
+  lastInspection: asset.lastInspectionDate || '—',
+  nextMaintenance: asset.nextInspectionDate || '—',
+  status: 'compliant' as const,
+  certificationNumber: '—',
+  supplier: asset.brand || '—',
+  specifications: {
+    capacity: '—',
+    type: asset.type || '—',
+    pressure: '—',
+    manufacturer: asset.brand || '—',
+    yearOfManufacture: asset.acquisitionDate ? asset.acquisitionDate.slice(0, 4) : '—'
+  }
+});
+
+export function QRInspection({ onBack, assetId, companyId, branchId }: QRInspectionProps) {
   const [scanMode, setScanMode] = useState(!assetId);
   const [showFaultReport, setShowFaultReport] = useState(false);
   const [faultDescription, setFaultDescription] = useState('');
   const [faultPhoto, setFaultPhoto] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Simulación del activo escaneado
-  const scannedAsset = {
-    id: 'AST-001',
-    code: 'EXT-MAI-001',
-    name: 'Extintor PQS 6kg - Oficinas',
-    category: 'Extintor',
-    location: 'Oficina Administrativa - Piso 2',
-    lastInspection: '2025-12-15',
-    nextMaintenance: '2026-12-15',
-    status: 'compliant' as const,
-    certificationNumber: 'CERT-2025-12345',
-    supplier: 'Extintores Chile S.A.',
-    specifications: {
-      capacity: '6 kg',
-      type: 'Polvo Químico Seco (PQS)',
-      pressure: '195 PSI',
-      manufacturer: 'Amerex',
-      yearOfManufacture: '2024'
-    }
-  };
+  const [scannedAsset, setScannedAsset] = useState(MOCK_ASSET);
+  const [realAssetId, setRealAssetId] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadAsset = async () => {
+      if (!assetId || !isSupabaseConfigured) {
+        if (!cancelled) {
+          setScannedAsset(MOCK_ASSET);
+          setRealAssetId(undefined);
+        }
+        return;
+      }
+      try {
+        const asset = await fetchAssetById(assetId);
+        if (!cancelled && asset) {
+          setScannedAsset(assetToDisplay(asset));
+          setRealAssetId(asset.id);
+        } else if (!cancelled) {
+          setScannedAsset(MOCK_ASSET);
+          setRealAssetId(undefined);
+        }
+      } catch (err: any) {
+        console.warn('No se pudo cargar el activo desde Supabase:', err.message);
+        if (!cancelled) {
+          setScannedAsset(MOCK_ASSET);
+          setRealAssetId(undefined);
+        }
+      }
+    };
+    loadAsset();
+    return () => { cancelled = true; };
+  }, [assetId]);
 
   const [inspectionItems, setInspectionItems] = useState<InspectionItem[]>([
     { id: '1', label: 'Estado del cilindro (sin abolladuras ni oxidación)', status: 'pending' },
@@ -111,26 +169,55 @@ export function QRInspection({ onBack, assetId }: QRInspectionProps) {
     }
   };
 
-  const handleReportFault = () => {
+  const persistInspection = async (description: string) => {
+    if (!companyId || !isSupabaseConfigured) return;
+    await createInspection({
+      companyId,
+      branchId,
+      assetId: realAssetId,
+      assetName: scannedAsset.name,
+      sector: scannedAsset.category,
+      location: scannedAsset.location,
+      description,
+      photos: faultPhoto ? [faultPhoto] : [],
+      checklistItems: inspectionItems.map(item => ({ label: item.label, status: item.status })),
+    });
+  };
+
+  const handleReportFault = async () => {
     if (!faultDescription) {
       toast.error('Describe la falla detectada');
       return;
     }
 
-    toast.error('Equipo bloqueado fuera de servicio', {
-      description: 'El activo ha sido marcado como NO DISPONIBLE hasta completar reparación.'
-    });
-
-    setShowFaultReport(false);
-    // En producción: enviar reporte al sistema y bloquear equipo
+    try {
+      await persistInspection(faultDescription);
+      toast.error('Equipo bloqueado fuera de servicio', {
+        description: 'El activo ha sido marcado como NO DISPONIBLE hasta completar reparación.'
+      });
+      setShowFaultReport(false);
+    } catch (err: any) {
+      toast.error('Error al guardar el reporte de falla', { description: err.message });
+    }
   };
 
-  const handleCompleteInspection = () => {
+  const handleCompleteInspection = async () => {
     const failedItems = inspectionItems.filter(item => item.status === 'fail');
     const pendingItems = inspectionItems.filter(item => item.status === 'pending');
 
     if (pendingItems.length > 0) {
       toast.error('Completa todas las verificaciones');
+      return;
+    }
+
+    try {
+      await persistInspection(
+        failedItems.length > 0
+          ? `Inspección con ${failedItems.length} verificación(es) fallida(s)`
+          : 'Inspección completada sin novedades'
+      );
+    } catch (err: any) {
+      toast.error('Error al guardar la inspección', { description: err.message });
       return;
     }
 

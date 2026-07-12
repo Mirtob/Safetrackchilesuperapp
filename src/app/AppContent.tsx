@@ -49,6 +49,9 @@ import { CriticalAccidentFAB } from '@/app/components/CriticalAccidentFAB';
 import { IntelligentSyncIndicator } from '@/app/components/IntelligentSyncIndicator';
 import { DocumentWorkflowDemo } from '@/app/components/DocumentWorkflowDemo';
 import { TrainingHistory } from '@/app/components/TrainingHistory';
+import { createInspection } from '@/app/services/inspectionsService';
+import { createIncident } from '@/app/services/incidentsService';
+import { isSupabaseConfigured } from '@/app/services/supabase';
 import { useTheme } from '@/app/components/ThemeProvider';
 import { useOfflineStorage } from '@/app/components/OfflineManager';
 import { useCompany, Company, Branch } from '@/app/context/CompanyContext';
@@ -131,6 +134,8 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<{ id: string; name: string } | null>(null);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
+  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const { companies, isLoading: companiesLoading, addCompany, addBranch } = useCompanies();
   const selectedCompanyObj = companies.find(c => c.id === selectedCompany) || null;
   const [currentFormType, setCurrentFormType] = useState<FormType>('inspection');
@@ -206,8 +211,8 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
 
   const handleFormSubmit = async (data: any) => {
     console.log('📝 handleFormSubmit ejecutado con data:', data);
-    
-    // Guardar el documento en el estado
+
+    // Guardar el documento en el estado (historial local de la sesión)
     const newDocument = {
       id: `doc-${Date.now()}`,
       type: currentFormType,
@@ -217,10 +222,8 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
       status: 'sent',
       sentTo: data.workers || []
     };
-    
     setSavedDocuments(prev => [newDocument, ...prev]);
-    console.log('✅ Documento guardado en estado:', newDocument);
-    
+
     // Save offline if no connection
     if (!isOnline) {
       await saveFormOffline(data);
@@ -229,6 +232,48 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
       });
       setCurrentView('triadic-dashboard');
       return;
+    }
+
+    // Persistir en Supabase cuando corresponda al tipo de formulario
+    if (selectedCompany && isSupabaseConfigured) {
+      try {
+        if (currentFormType === 'inspection') {
+          await createInspection({
+            companyId: selectedCompany,
+            branchId: selectedBranch?.id,
+            sector: data.sectorName || data.sector,
+            assetName: data.assetName,
+            description: data.description,
+            location: data.location,
+            photos: data.photos || [],
+            signatureData: data.signature,
+          });
+        } else if (currentFormType === 'incident') {
+          await createIncident({
+            companyId: selectedCompany,
+            branchId: selectedBranch?.id,
+            incidentType: data.incidentType,
+            severity: data.severity,
+            title: data.title,
+            description: data.description,
+            sector: data.sectorName || data.sector,
+            location: data.location,
+            affectedWorkers: (data.affectedWorkersDetails || []).map((w: any) => ({
+              id: w.id,
+              name: w.name,
+              rut: w.rut,
+              position: w.position,
+              department: w.department,
+            })),
+            immediateActions: data.immediateActions,
+            photos: data.photos || [],
+            signatureData: data.signature,
+          });
+        }
+      } catch (err: any) {
+        toast.error('Error al guardar en la base de datos', { description: err.message });
+        return;
+      }
     }
 
     toast.success('✅ Documento enviado exitosamente', {
@@ -330,13 +375,18 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
                   setCurrentTalkDeliveryType('talk');
                 }
               }
+              // Si es incident-followup con un id específico, recordarlo para abrir ese incidente
+              if (view === 'incident-followup') {
+                setSelectedIncidentId(actionId || null);
+              }
               navigateToView(view as View); // Usar navigateToView para guardar historial
             }}
             isOnline={isOnline}
             pendingItems={pendingItems}
+            companyId={selectedCompany || undefined}
           />
         );
-      
+
       case 'form':
         // Usar formulario mejorado para inspecciones
         if (currentFormType === 'inspection') {
@@ -403,6 +453,7 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
         return (
           <InspectionModeEnhanced
             onBack={goBack}
+            companyId={selectedCompany || undefined}
           />
         );
       
@@ -432,6 +483,9 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
           <CalendarView
             onBack={goBack}
             onViewRouteOptimizer={() => navigateToView('route-optimizer')}
+            companyId={selectedCompany || undefined}
+            companyName={selectedCompanyObj?.name}
+            branchId={selectedBranch?.id}
           />
         );
       
@@ -532,22 +586,28 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
           <AssetInventory
             onBack={goBack}
             onViewPlanner={() => navigateToView('maintenance-planner')}
-            onScanQR={(assetId) => navigateToView('qr-inspection')}
+            onScanQR={(assetId) => {
+              setSelectedAssetId(assetId === 'scan-mode' ? null : assetId);
+              navigateToView('qr-inspection');
+            }}
             onViewAlerts={() => navigateToView('alert-center')}
           />
         );
-      
+
       case 'maintenance-planner':
         return (
           <MaintenancePlanner
             onBack={goBack}
           />
         );
-      
+
       case 'qr-inspection':
         return (
           <QRInspection
             onBack={goBack}
+            assetId={selectedAssetId || undefined}
+            companyId={selectedCompany || undefined}
+            branchId={selectedBranch?.id}
           />
         );
       
@@ -589,6 +649,7 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
             onViewFinancialImpact={() => navigateToView('financial-impact')}
             onViewBranchRisk={() => navigateToView('branch-risk')}
             onViewAPIConfig={() => navigateToView('api-integration')}
+            companyId={selectedCompany || undefined}
           />
         );
       
@@ -652,6 +713,7 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
         return (
           <QRCodeManager
             onBack={goBack}
+            companies={companies.map(c => ({ id: c.id, name: c.name }))}
           />
         );
       
@@ -685,6 +747,8 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
         return (
           <IncidentFollowUp
             onBack={goBack}
+            companyId={selectedCompany || undefined}
+            initialIncidentId={selectedIncidentId || undefined}
           />
         );
       
@@ -699,6 +763,11 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
         return (
           <TrainingHistory
             onBack={goBack}
+            companies={companies.map(c => ({
+              id: c.id,
+              name: c.name,
+              branches: c.branches.map(b => ({ id: b.id, name: b.name })),
+            }))}
           />
         );
       

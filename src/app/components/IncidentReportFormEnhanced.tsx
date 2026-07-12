@@ -30,7 +30,7 @@ import {
 
 interface IncidentReportFormEnhancedProps {
   onBack: () => void;
-  onSubmit: (data: FormData) => void;
+  onSubmit: (data: FormData & { affectedWorkersDetails: Worker[] }) => void;
 }
 
 interface FormData {
@@ -1287,7 +1287,7 @@ export function IncidentReportFormEnhanced({ onBack, onSubmit }: IncidentReportF
           onClose={() => setShowDocumentWorkflow(false)}
           onSendComplete={() => {
             setShowDocumentWorkflow(false);
-            onSubmit(formData);
+            onSubmit({ ...formData, affectedWorkersDetails: selectedWorkers });
           }}
         />
       )}

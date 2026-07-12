@@ -1,5 +1,11 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import {
+  fetchQRCodesForCompanies,
+  toggleQRCodeActive,
+  regenerateQRToken,
+} from '@/app/services/qrCodesService';
+import { isSupabaseConfigured } from '@/app/services/supabase';
 import {
   ArrowLeft,
   Download,
@@ -24,6 +30,7 @@ import { toast } from 'sonner';
 
 interface QRCodeManagerProps {
   onBack: () => void;
+  companies?: { id: string; name: string }[];
 }
 
 interface CompanyQRCode {
@@ -38,8 +45,8 @@ interface CompanyQRCode {
   lastUsed: string | null;
 }
 
-// Base de datos simulada de QR codes
-const INITIAL_QR_CODES: CompanyQRCode[] = [
+// QR codes de demostración: se usan solo si Supabase no está configurado o no hay empresas
+const MOCK_QR_CODES: CompanyQRCode[] = [
   {
     id: '1',
     companyName: 'Constructora Los Andes',
@@ -75,11 +82,46 @@ const INITIAL_QR_CODES: CompanyQRCode[] = [
   }
 ];
 
-export function QRCodeManager({ onBack }: QRCodeManagerProps) {
-  const [qrCodes, setQrCodes] = useState<CompanyQRCode[]>(INITIAL_QR_CODES);
-  const [selectedQR, setSelectedQR] = useState<CompanyQRCode | null>(INITIAL_QR_CODES[0]);
+export function QRCodeManager({ onBack, companies }: QRCodeManagerProps) {
+  const [qrCodes, setQrCodes] = useState<CompanyQRCode[]>([]);
+  const [selectedQR, setSelectedQR] = useState<CompanyQRCode | null>(null);
   const [showInstructions, setShowInstructions] = useState(false);
+  const [isLoadingQRCodes, setIsLoadingQRCodes] = useState(true);
   const qrRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadQRCodes = async () => {
+      setIsLoadingQRCodes(true);
+      if (!isSupabaseConfigured || !companies || companies.length === 0) {
+        if (!cancelled) {
+          setQrCodes(MOCK_QR_CODES);
+          setSelectedQR(MOCK_QR_CODES[0] || null);
+          setIsLoadingQRCodes(false);
+        }
+        return;
+      }
+      try {
+        const data = await fetchQRCodesForCompanies(companies);
+        if (!cancelled) {
+          setQrCodes(data);
+          setSelectedQR(data[0] || null);
+        }
+      } catch (err: any) {
+        console.warn('No se pudo cargar códigos QR desde Supabase:', err.message);
+        if (!cancelled) {
+          setQrCodes(MOCK_QR_CODES);
+          setSelectedQR(MOCK_QR_CODES[0] || null);
+        }
+      } finally {
+        if (!cancelled) setIsLoadingQRCodes(false);
+      }
+    };
+    loadQRCodes();
+    return () => { cancelled = true; };
+  }, [companies]);
+
+  const canPersist = Boolean(isSupabaseConfigured && companies && companies.length > 0);
 
   const generateQRUrl = (token: string) => {
     // En producción, esta sería la URL real de tu app
@@ -329,35 +371,48 @@ export function QRCodeManager({ onBack }: QRCodeManagerProps) {
     });
   };
 
-  const handleToggleActive = (id: string) => {
-    setQrCodes(prev => prev.map(qr => 
-      qr.id === id 
-        ? { ...qr, isActive: !qr.isActive }
-        : qr
-    ));
-
+  const handleToggleActive = async (id: string) => {
     const qr = qrCodes.find(q => q.id === id);
-    toast.success(
-      qr?.isActive ? '🔴 QR desactivado' : '✅ QR activado',
-      {
-        description: qr?.isActive 
-          ? 'Ya no se podrá usar para reportar accidentes' 
-          : 'Ahora puede usarse para reportar accidentes'
+    if (!qr) return;
+    const nextActive = !qr.isActive;
+
+    try {
+      if (canPersist) {
+        await toggleQRCodeActive(id, nextActive);
       }
-    );
+      const updateQR = (q: CompanyQRCode) => (q.id === id ? { ...q, isActive: nextActive } : q);
+      setQrCodes(prev => prev.map(updateQR));
+      setSelectedQR(prev => (prev ? updateQR(prev) : prev));
+
+      toast.success(
+        qr.isActive ? '🔴 QR desactivado' : '✅ QR activado',
+        {
+          description: qr.isActive
+            ? 'Ya no se podrá usar para reportar accidentes'
+            : 'Ahora puede usarse para reportar accidentes'
+        }
+      );
+    } catch (err: any) {
+      toast.error('Error al actualizar el código QR', { description: err.message });
+    }
   };
 
-  const handleRegenerateToken = (id: string) => {
-    const newToken = `QR-EMERGENCY-${Date.now().toString(36).toUpperCase()}`;
-    setQrCodes(prev => prev.map(qr => 
-      qr.id === id 
-        ? { ...qr, token: newToken, createdDate: new Date().toISOString().split('T')[0] }
-        : qr
-    ));
+  const handleRegenerateToken = async (id: string) => {
+    try {
+      const newToken = canPersist
+        ? await regenerateQRToken(id)
+        : `QR-EMERGENCY-${Date.now().toString(36).toUpperCase()}`;
 
-    toast.success('🔄 Token regenerado', {
-      description: 'El código QR anterior ya no funcionará'
-    });
+      const updateQR = (q: CompanyQRCode) => (q.id === id ? { ...q, token: newToken } : q);
+      setQrCodes(prev => prev.map(updateQR));
+      setSelectedQR(prev => (prev ? updateQR(prev) : prev));
+
+      toast.success('🔄 Token regenerado', {
+        description: 'El código QR anterior ya no funcionará'
+      });
+    } catch (err: any) {
+      toast.error('Error al regenerar el token', { description: err.message });
+    }
   };
 
   return (
@@ -453,8 +508,15 @@ export function QRCodeManager({ onBack }: QRCodeManagerProps) {
                 Empresas Asignadas
               </h3>
 
+              {isLoadingQRCodes && (
+                <div className="flex items-center justify-center py-8 text-slate-400">
+                  <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
+                  Cargando...
+                </div>
+              )}
+
               <div className="space-y-2">
-                {qrCodes.map(qr => (
+                {!isLoadingQRCodes && qrCodes.map(qr => (
                   <button
                     key={qr.id}
                     onClick={() => setSelectedQR(qr)}

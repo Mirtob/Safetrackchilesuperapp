@@ -1,5 +1,14 @@
-import { useState } from 'react';
-import { 
+import { useState, useEffect } from 'react';
+import {
+  fetchIncidentsForCompanies,
+  fetchIncidentActions,
+  createIncidentAction,
+  updateIncidentActionStatus,
+  fetchIncidentMedicalRecords,
+  createIncidentMedicalRecord,
+} from '@/app/services/incidentsService';
+import { isSupabaseConfigured } from '@/app/services/supabase';
+import {
   ArrowLeft, 
   Plus, 
   Clock, 
@@ -34,6 +43,8 @@ import { toast } from 'sonner';
 
 interface IncidentFollowUpProps {
   onBack: () => void;
+  companyId?: string;
+  initialIncidentId?: string;
 }
 
 interface Incident {
@@ -150,73 +161,154 @@ const INCIDENT_STATUS_CONFIG = {
   closed: { label: 'Cerrado', color: 'bg-green-600', icon: '✅' }
 };
 
-export function IncidentFollowUp({ onBack }: IncidentFollowUpProps) {
+const MOCK_ACTIONS: Action[] = [
+  {
+    id: 'ACT-001',
+    incidentId: 'INC-001',
+    type: 'medical',
+    title: 'Evaluación médica inicial',
+    description: 'Trabajador derivado a mutualidad para evaluación de lesión en hombro',
+    responsible: 'Mutual de Seguridad',
+    deadline: '2025-01-15T16:00:00',
+    status: 'completed',
+    priority: 'urgent',
+    createdAt: '2025-01-15T10:45:00',
+    completedAt: '2025-01-15T15:30:00'
+  },
+  {
+    id: 'ACT-002',
+    incidentId: 'INC-001',
+    type: 'investigation',
+    title: 'Investigación de causas raíz',
+    description: 'Entrevistas con testigos y análisis de condiciones de apilamiento',
+    responsible: 'Juan Pérez Silva',
+    deadline: '2025-01-20T17:00:00',
+    status: 'in-progress',
+    priority: 'high',
+    createdAt: '2025-01-15T11:00:00'
+  },
+  {
+    id: 'ACT-003',
+    incidentId: 'INC-001',
+    type: 'corrective',
+    title: 'Reestiba de materiales',
+    description: 'Reorganizar bodega con sistema de estanterías seguras',
+    responsible: 'Supervisor Bodega',
+    deadline: '2025-01-30T17:00:00',
+    status: 'pending',
+    priority: 'high',
+    createdAt: '2025-01-15T12:00:00'
+  }
+];
+
+const MOCK_MEDICAL_RECORDS: MedicalRecord[] = [
+  {
+    id: 'MED-001',
+    incidentId: 'INC-001',
+    workerName: 'Pedro Rojas González',
+    injuryType: 'Contusión hombro derecho',
+    injurySeverity: 'moderada',
+    medicalAttention: 'mutualidad',
+    diagnosis: 'Contusión muscular hombro derecho, sin fractura',
+    treatment: 'Reposo relativo, antiinflamatorios, fisioterapia',
+    medicalLeave: true,
+    leaveDays: 7,
+    leaveStartDate: '2025-01-16',
+    leaveEndDate: '2025-01-23',
+    workRestrictions: 'No levantar objetos sobre 5kg por 2 semanas',
+    followUpRequired: true,
+    nextCheckup: '2025-01-30',
+    createdAt: '2025-01-15T15:30:00'
+  }
+];
+
+export function IncidentFollowUp({ onBack, companyId, initialIncidentId }: IncidentFollowUpProps) {
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
   const [showActionModal, setShowActionModal] = useState(false);
   const [showMedicalModal, setShowMedicalModal] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
 
-  const [actions, setActions] = useState<Action[]>([
-    {
-      id: 'ACT-001',
-      incidentId: 'INC-001',
-      type: 'medical',
-      title: 'Evaluación médica inicial',
-      description: 'Trabajador derivado a mutualidad para evaluación de lesión en hombro',
-      responsible: 'Mutual de Seguridad',
-      deadline: '2025-01-15T16:00:00',
-      status: 'completed',
-      priority: 'urgent',
-      createdAt: '2025-01-15T10:45:00',
-      completedAt: '2025-01-15T15:30:00'
-    },
-    {
-      id: 'ACT-002',
-      incidentId: 'INC-001',
-      type: 'investigation',
-      title: 'Investigación de causas raíz',
-      description: 'Entrevistas con testigos y análisis de condiciones de apilamiento',
-      responsible: 'Juan Pérez Silva',
-      deadline: '2025-01-20T17:00:00',
-      status: 'in-progress',
-      priority: 'high',
-      createdAt: '2025-01-15T11:00:00'
-    },
-    {
-      id: 'ACT-003',
-      incidentId: 'INC-001',
-      type: 'corrective',
-      title: 'Reestiba de materiales',
-      description: 'Reorganizar bodega con sistema de estanterías seguras',
-      responsible: 'Supervisor Bodega',
-      deadline: '2025-01-30T17:00:00',
-      status: 'pending',
-      priority: 'high',
-      createdAt: '2025-01-15T12:00:00'
-    }
-  ]);
+  const canPersist = Boolean(isSupabaseConfigured && companyId);
 
-  const [medicalRecords, setMedicalRecords] = useState<MedicalRecord[]>([
-    {
-      id: 'MED-001',
-      incidentId: 'INC-001',
-      workerName: 'Pedro Rojas González',
-      injuryType: 'Contusión hombro derecho',
-      injurySeverity: 'moderada',
-      medicalAttention: 'mutualidad',
-      diagnosis: 'Contusión muscular hombro derecho, sin fractura',
-      treatment: 'Reposo relativo, antiinflamatorios, fisioterapia',
-      medicalLeave: true,
-      leaveDays: 7,
-      leaveStartDate: '2025-01-16',
-      leaveEndDate: '2025-01-23',
-      workRestrictions: 'No levantar objetos sobre 5kg por 2 semanas',
-      followUpRequired: true,
-      nextCheckup: '2025-01-30',
-      createdAt: '2025-01-15T15:30:00'
+  const [incidents, setIncidents] = useState<Incident[]>(MOCK_INCIDENTS);
+  const [isLoadingIncidents, setIsLoadingIncidents] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadIncidents = async () => {
+      setIsLoadingIncidents(true);
+      if (!canPersist) {
+        if (!cancelled) setIncidents(MOCK_INCIDENTS);
+        if (!cancelled) setIsLoadingIncidents(false);
+        return;
+      }
+      try {
+        const data = await fetchIncidentsForCompanies([companyId!]);
+        if (!cancelled) {
+          setIncidents(data.map((inc): Incident => ({
+            id: inc.id,
+            code: inc.code,
+            type: inc.type,
+            title: inc.title,
+            description: inc.description,
+            severity: inc.severity,
+            sector: inc.sector,
+            date: inc.date,
+            reportedBy: inc.reportedBy,
+            affectedPersons: inc.affectedPersons,
+            status: inc.status,
+            daysOpen: inc.daysOpen,
+          })));
+        }
+      } catch (err: any) {
+        console.warn('No se pudo cargar incidentes desde Supabase:', err.message);
+        if (!cancelled) setIncidents(MOCK_INCIDENTS);
+      } finally {
+        if (!cancelled) setIsLoadingIncidents(false);
+      }
+    };
+    loadIncidents();
+    return () => { cancelled = true; };
+  }, [companyId, canPersist]);
+
+  useEffect(() => {
+    if (initialIncidentId && incidents.length > 0 && !selectedIncident) {
+      const match = incidents.find(i => i.id === initialIncidentId);
+      if (match) setSelectedIncident(match);
     }
-  ]);
+  }, [initialIncidentId, incidents]);
+
+  const [actions, setActions] = useState<Action[]>([]);
+  const [medicalRecords, setMedicalRecords] = useState<MedicalRecord[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadIncidentDetail = async () => {
+      if (!selectedIncident) return;
+      if (!canPersist) {
+        if (!cancelled) {
+          setActions(MOCK_ACTIONS.filter(a => a.incidentId === selectedIncident.id));
+          setMedicalRecords(MOCK_MEDICAL_RECORDS.filter(m => m.incidentId === selectedIncident.id));
+        }
+        return;
+      }
+      try {
+        const [actionsData, medicalData] = await Promise.all([
+          fetchIncidentActions(selectedIncident.id),
+          fetchIncidentMedicalRecords(selectedIncident.id),
+        ]);
+        if (!cancelled) {
+          setActions(actionsData);
+          setMedicalRecords(medicalData);
+        }
+      } catch (err: any) {
+        toast.error('No se pudo cargar el detalle del incidente', { description: err.message });
+      }
+    };
+    loadIncidentDetail();
+    return () => { cancelled = true; };
+  }, [selectedIncident, canPersist]);
 
   const [newAction, setNewAction] = useState({
     type: 'corrective',
@@ -243,7 +335,7 @@ export function IncidentFollowUp({ onBack }: IncidentFollowUpProps) {
     nextCheckup: ''
   });
 
-  const filteredIncidents = MOCK_INCIDENTS.filter(incident => {
+  const filteredIncidents = incidents.filter(incident => {
     if (filterStatus !== 'all' && incident.status !== filterStatus) return false;
     if (filterType !== 'all' && incident.type !== filterType) return false;
     return true;
@@ -257,84 +349,110 @@ export function IncidentFollowUp({ onBack }: IncidentFollowUpProps) {
     return medicalRecords.filter(record => record.incidentId === incidentId);
   };
 
-  const handleAddAction = () => {
+  const handleAddAction = async () => {
     if (!selectedIncident) return;
-    
+
     if (!newAction.title || !newAction.responsible) {
       toast.error('Completa todos los campos obligatorios');
       return;
     }
 
-    const action: Action = {
-      id: `ACT-${Date.now()}`,
-      incidentId: selectedIncident.id,
-      ...newAction,
-      status: 'pending',
-      createdAt: new Date().toISOString()
-    };
+    try {
+      let action: Action;
+      if (canPersist) {
+        action = await createIncidentAction(selectedIncident.id, newAction as Action);
+      } else {
+        action = {
+          id: `ACT-${Date.now()}`,
+          incidentId: selectedIncident.id,
+          ...newAction,
+          status: 'pending',
+          createdAt: new Date().toISOString()
+        };
+      }
 
-    setActions([...actions, action]);
-    setShowActionModal(false);
-    setNewAction({
-      type: 'corrective',
-      title: '',
-      description: '',
-      responsible: '',
-      deadline: new Date().toISOString().split('T')[0],
-      priority: 'medium'
-    });
+      setActions([...actions, action]);
+      setShowActionModal(false);
+      setNewAction({
+        type: 'corrective',
+        title: '',
+        description: '',
+        responsible: '',
+        deadline: new Date().toISOString().split('T')[0],
+        priority: 'medium'
+      });
 
-    toast.success('✅ Acción agregada exitosamente', {
-      description: `${action.title} - Responsable: ${action.responsible}`
-    });
+      toast.success('✅ Acción agregada exitosamente', {
+        description: `${action.title} - Responsable: ${action.responsible}`
+      });
+    } catch (err: any) {
+      toast.error('Error al agregar la acción', { description: err.message });
+    }
   };
 
-  const handleAddMedicalRecord = () => {
+  const handleAddMedicalRecord = async () => {
     if (!selectedIncident) return;
-    
+
     if (!newMedicalRecord.workerName || !newMedicalRecord.injuryType) {
       toast.error('Completa los campos obligatorios');
       return;
     }
 
-    const record: MedicalRecord = {
-      id: `MED-${Date.now()}`,
-      incidentId: selectedIncident.id,
-      ...newMedicalRecord,
-      createdAt: new Date().toISOString()
-    };
+    try {
+      let record: MedicalRecord;
+      if (canPersist) {
+        record = await createIncidentMedicalRecord(selectedIncident.id, newMedicalRecord);
+      } else {
+        record = {
+          id: `MED-${Date.now()}`,
+          incidentId: selectedIncident.id,
+          ...newMedicalRecord,
+          createdAt: new Date().toISOString()
+        };
+      }
 
-    setMedicalRecords([...medicalRecords, record]);
-    setShowMedicalModal(false);
-    setNewMedicalRecord({
-      workerName: '',
-      injuryType: '',
-      injurySeverity: 'leve',
-      medicalAttention: 'primeros-auxilios',
-      diagnosis: '',
-      treatment: '',
-      medicalLeave: false,
-      leaveDays: 0,
-      leaveStartDate: '',
-      leaveEndDate: '',
-      workRestrictions: '',
-      followUpRequired: false,
-      nextCheckup: ''
-    });
+      setMedicalRecords([...medicalRecords, record]);
+      setShowMedicalModal(false);
+      setNewMedicalRecord({
+        workerName: '',
+        injuryType: '',
+        injurySeverity: 'leve',
+        medicalAttention: 'primeros-auxilios',
+        diagnosis: '',
+        treatment: '',
+        medicalLeave: false,
+        leaveDays: 0,
+        leaveStartDate: '',
+        leaveEndDate: '',
+        workRestrictions: '',
+        followUpRequired: false,
+        nextCheckup: ''
+      });
 
-    toast.success('🏥 Registro médico agregado exitosamente');
+      toast.success('🏥 Registro médico agregado exitosamente');
+    } catch (err: any) {
+      toast.error('Error al agregar el registro médico', { description: err.message });
+    }
   };
 
-  const handleUpdateActionStatus = (actionId: string, newStatus: Action['status']) => {
-    setActions(actions.map(action => 
-      action.id === actionId 
-        ? { 
-            ...action, 
-            status: newStatus,
-            completedAt: newStatus === 'completed' ? new Date().toISOString() : undefined
-          }
-        : action
-    ));
+  const handleUpdateActionStatus = async (actionId: string, newStatus: Action['status']) => {
+    try {
+      if (canPersist) {
+        await updateIncidentActionStatus(actionId, newStatus);
+      }
+      setActions(actions.map(action =>
+        action.id === actionId
+          ? {
+              ...action,
+              status: newStatus,
+              completedAt: newStatus === 'completed' ? new Date().toISOString() : undefined
+            }
+          : action
+      ));
+    } catch (err: any) {
+      toast.error('Error al actualizar la acción', { description: err.message });
+      return;
+    }
 
     const statusLabels = {
       pending: 'Pendiente',
@@ -397,7 +515,7 @@ export function IncidentFollowUp({ onBack }: IncidentFollowUpProps) {
                   <AlertTriangle className="w-4 h-4 text-red-600" />
                 </div>
                 <div className="text-2xl font-bold text-red-900 dark:text-red-300">
-                  {MOCK_INCIDENTS.filter(i => i.status === 'open' || i.status === 'investigating').length}
+                  {incidents.filter(i => i.status === 'open' || i.status === 'investigating').length}
                 </div>
               </div>
             </Card>
@@ -409,7 +527,7 @@ export function IncidentFollowUp({ onBack }: IncidentFollowUpProps) {
                   <Clock className="w-4 h-4 text-blue-600" />
                 </div>
                 <div className="text-2xl font-bold text-blue-900 dark:text-blue-300">
-                  {MOCK_INCIDENTS.filter(i => i.status === 'corrective-actions' || i.status === 'monitoring').length}
+                  {incidents.filter(i => i.status === 'corrective-actions' || i.status === 'monitoring').length}
                 </div>
               </div>
             </Card>
@@ -421,7 +539,7 @@ export function IncidentFollowUp({ onBack }: IncidentFollowUpProps) {
                   <CheckCircle className="w-4 h-4 text-green-600" />
                 </div>
                 <div className="text-2xl font-bold text-green-900 dark:text-green-300">
-                  {MOCK_INCIDENTS.filter(i => i.status === 'closed').length}
+                  {incidents.filter(i => i.status === 'closed').length}
                 </div>
               </div>
             </Card>
@@ -433,7 +551,7 @@ export function IncidentFollowUp({ onBack }: IncidentFollowUpProps) {
                   <FileText className="w-4 h-4 text-purple-600" />
                 </div>
                 <div className="text-2xl font-bold text-purple-900 dark:text-purple-300">
-                  {MOCK_INCIDENTS.length}
+                  {incidents.length}
                 </div>
               </div>
             </Card>
@@ -478,8 +596,14 @@ export function IncidentFollowUp({ onBack }: IncidentFollowUpProps) {
           </Card>
 
           {/* Lista de incidentes */}
+          {isLoadingIncidents && (
+            <div className="flex items-center justify-center py-12 text-slate-400">
+              <Clock className="w-5 h-5 mr-2 animate-spin" />
+              Cargando incidentes...
+            </div>
+          )}
           <div className="space-y-4">
-            {filteredIncidents.map(incident => {
+            {!isLoadingIncidents && filteredIncidents.map(incident => {
               const progress = calculateProgress(incident);
               const incidentActions = getIncidentActions(incident.id);
               const medicalRecords = getIncidentMedicalRecords(incident.id);

@@ -1,4 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { fetchTrainingRecords } from '@/app/services/safetyTalksService';
+import { isSupabaseConfigured } from '@/app/services/supabase';
 import {
   ArrowLeft,
   FileText,
@@ -53,9 +55,10 @@ interface TrainingRecord {
 
 interface TrainingHistoryProps {
   onBack: () => void;
+  companies?: { id: string; name: string; branches: { id: string; name: string }[] }[];
 }
 
-// Datos de ejemplo
+// Datos de ejemplo: se usan solo si Supabase no está configurado o no hay empresas
 const MOCK_RECORDS: TrainingRecord[] = [
   {
     id: 'TRN-001',
@@ -149,8 +152,6 @@ const MOCK_RECORDS: TrainingRecord[] = [
   }
 ];
 
-const COMPANIES = ['Todas', 'Constructora Los Andes S.A.', 'Minera San José', 'Forestal del Sur'];
-const BRANCHES = ['Todas', 'Maipú', 'Quilicura', 'San Bernardo', 'Puente Alto'];
 const ACTIVITY_TYPES = [
   { value: 'all', label: 'Todas las Actividades', icon: '📋' },
   { value: 'talk', label: 'Charlas de 5 Min', icon: '💬' },
@@ -158,7 +159,7 @@ const ACTIVITY_TYPES = [
   { value: 'induction', label: 'Inducciones', icon: '📚' }
 ];
 
-export function TrainingHistory({ onBack }: TrainingHistoryProps) {
+export function TrainingHistory({ onBack, companies }: TrainingHistoryProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCompany, setSelectedCompany] = useState('Todas');
   const [selectedBranch, setSelectedBranch] = useState('Todas');
@@ -169,10 +170,45 @@ export function TrainingHistory({ onBack }: TrainingHistoryProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<TrainingRecord | null>(null);
 
+  const [records, setRecords] = useState<TrainingRecord[]>([]);
+  const [isLoadingRecords, setIsLoadingRecords] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadRecords = async () => {
+      setIsLoadingRecords(true);
+      if (!isSupabaseConfigured || !companies || companies.length === 0) {
+        if (!cancelled) setRecords(MOCK_RECORDS);
+        if (!cancelled) setIsLoadingRecords(false);
+        return;
+      }
+      try {
+        const data = await fetchTrainingRecords(companies);
+        if (!cancelled) setRecords(data);
+      } catch (err: any) {
+        console.warn('No se pudo cargar el historial desde Supabase:', err.message);
+        if (!cancelled) setRecords(MOCK_RECORDS);
+      } finally {
+        if (!cancelled) setIsLoadingRecords(false);
+      }
+    };
+    loadRecords();
+    return () => { cancelled = true; };
+  }, [companies]);
+
+  const COMPANIES = useMemo(
+    () => ['Todas', ...Array.from(new Set(records.map(r => r.company).filter(Boolean)))],
+    [records]
+  );
+  const BRANCHES = useMemo(
+    () => ['Todas', ...Array.from(new Set(records.map(r => r.branch).filter(Boolean)))],
+    [records]
+  );
+
   // Obtener lista de trabajadores únicos para filtro
   const allWorkers = useMemo(() => {
     const workersMap = new Map<string, { id: string; name: string; rut: string }>();
-    MOCK_RECORDS.forEach(record => {
+    records.forEach(record => {
       record.workers.forEach(worker => {
         if (!workersMap.has(worker.id)) {
           workersMap.set(worker.id, {
@@ -184,11 +220,11 @@ export function TrainingHistory({ onBack }: TrainingHistoryProps) {
       });
     });
     return Array.from(workersMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, []);
+  }, [records]);
 
   // Filtrar registros
   const filteredRecords = useMemo(() => {
-    let filtered = [...MOCK_RECORDS];
+    let filtered = [...records];
 
     // Filtro por empresa
     if (selectedCompany !== 'Todas') {
@@ -237,7 +273,7 @@ export function TrainingHistory({ onBack }: TrainingHistoryProps) {
     return filtered.sort((a, b) => 
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
-  }, [searchTerm, selectedCompany, selectedBranch, selectedType, selectedWorker, dateFrom, dateTo]);
+  }, [records, searchTerm, selectedCompany, selectedBranch, selectedType, selectedWorker, dateFrom, dateTo]);
 
   // Estadísticas
   const stats = useMemo(() => {
@@ -689,7 +725,14 @@ export function TrainingHistory({ onBack }: TrainingHistoryProps) {
         </Card>
 
         {/* Lista de Registros */}
-        {filteredRecords.length === 0 ? (
+        {isLoadingRecords ? (
+          <Card>
+            <div className="p-12 text-center text-slate-400 flex items-center justify-center gap-2">
+              <Clock className="w-5 h-5 animate-spin" />
+              Cargando historial...
+            </div>
+          </Card>
+        ) : filteredRecords.length === 0 ? (
           <Card>
             <div className="p-12 text-center">
               <FileText className="w-12 h-12 text-slate-400 mx-auto mb-3" />

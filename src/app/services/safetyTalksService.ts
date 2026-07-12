@@ -194,3 +194,159 @@ export const markTalkDocumentSent = async (
 
   if (error) throw error;
 };
+
+// ── Historial de capacitaciones (TrainingHistory) ───────────────────────────
+
+export interface TrainingRecordWorker {
+  id: string;
+  name: string;
+  rut: string;
+  position: string;
+  signed: boolean;
+  signedAt?: string;
+}
+
+export interface TrainingRecord {
+  id: string;
+  type: 'talk' | 'epp' | 'induction';
+  title: string;
+  description: string;
+  date: string;
+  time: string;
+  location: string;
+  company: string;
+  branch: string;
+  preventionist: string;
+  workers: TrainingRecordWorker[];
+  epps?: string[];
+  status: 'completed' | 'pending' | 'cancelled';
+  createdAt: string;
+  documentUrl?: string;
+}
+
+/** Trae el historial de charlas/EPP/inducciones (con firmantes) de un conjunto de empresas. */
+export const fetchTrainingRecords = async (
+  companies: { id: string; name: string; branches: { id: string; name: string }[] }[]
+): Promise<TrainingRecord[]> => {
+  if (companies.length === 0) return [];
+  const companyIds = companies.map(c => c.id);
+
+  const { data, error } = await supabase
+    .from('safety_talks')
+    .select('*, signatures(*)')
+    .in('company_id', companyIds)
+    .order('talk_date', { ascending: false });
+
+  if (error) throw error;
+
+  const companyById = new Map(companies.map(c => [c.id, c]));
+
+  return (data || []).map((row: any): TrainingRecord => {
+    const company = companyById.get(row.company_id);
+    const branch = company?.branches.find(b => b.id === row.branch_id);
+    const createdAt = new Date(row.created_at);
+
+    return {
+      id: row.id,
+      type: (row.talk_type || 'talk') as TrainingRecord['type'],
+      title: row.title,
+      description: row.topic || '',
+      date: row.talk_date,
+      time: createdAt.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
+      location: row.location || '',
+      company: company?.name || '',
+      branch: branch?.name || '',
+      preventionist: 'Prevencionista a cargo',
+      workers: (row.signatures || []).map((sig: any): TrainingRecordWorker => ({
+        id: sig.worker_id || sig.id,
+        name: sig.worker_name,
+        rut: sig.worker_rut || '',
+        position: '',
+        signed: true,
+        signedAt: sig.signed_at,
+      })),
+      epps: Array.isArray(row.epp_items) ? row.epp_items : undefined,
+      status: row.status === 'completed' ? 'completed' : 'pending',
+      createdAt: row.created_at,
+      documentUrl: row.pdf_url || undefined,
+    };
+  });
+};
+
+// ── Modo Fiscalización (InspectionModeEnhanced) ─────────────────────────────
+
+export interface ComplianceDocument {
+  id: string;
+  name: string;
+  category: string;
+  hasSigned: boolean;
+  missingSignatures: string[];
+  date: string;
+  signers: string[];
+}
+
+const categoryDisplayLabel: Record<string, string> = {
+  EPP: 'Elementos de Protección',
+  Charlas: 'Capacitación',
+  Inducciones: 'Capacitación',
+};
+
+/** Documentos (charlas/EPP/inducciones) de una empresa desde una fecha, para el paquete de fiscalización. */
+export const fetchComplianceDocuments = async (
+  companyId: string,
+  fromDate: string
+): Promise<ComplianceDocument[]> => {
+  const { data, error } = await supabase
+    .from('safety_talks')
+    .select('*, signatures(id)')
+    .eq('company_id', companyId)
+    .gte('talk_date', fromDate)
+    .order('talk_date', { ascending: false });
+
+  if (error) throw error;
+
+  return (data || []).map((row: any): ComplianceDocument => {
+    const talk = mapTalkDocument(row);
+    const approved = talk.managerApprovalStatus === 'approved';
+    const signers = ['Prevencionista'];
+    if (talk.signaturesCount > 0) signers.push(`Trabajador (${talk.signaturesCount})`);
+    signers.push('Gerente');
+
+    return {
+      id: talk.id,
+      name: talk.title,
+      category: categoryDisplayLabel[talk.category] || talk.category,
+      hasSigned: approved,
+      missingSignatures: approved ? [] : ['Gerente'],
+      date: talk.date,
+      signers,
+    };
+  });
+};
+
+export const createInspectorAccessLink = async (
+  companyId: string,
+  periodLabel: string,
+  documentCount: number
+): Promise<{ token: string }> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('No autenticado');
+
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 30);
+
+  const { data, error } = await supabase
+    .from('inspector_access_links')
+    .insert({
+      company_id: companyId,
+      created_by: user.id,
+      period_label: periodLabel,
+      document_count: documentCount,
+      expires_at: expiresAt.toISOString(),
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return { token: data.token };
+};

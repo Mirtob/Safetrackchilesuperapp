@@ -1,5 +1,7 @@
-import { useState } from 'react';
-import { 
+import { useState, useEffect } from 'react';
+import { fetchIncidentsForCompanies } from '@/app/services/incidentsService';
+import { isSupabaseConfigured } from '@/app/services/supabase';
+import {
   Activity,
   AlertTriangle,
   TrendingUp,
@@ -26,6 +28,7 @@ interface IncidentDashboardWidgetProps {
   onViewDetails?: (incidentId: string) => void;
   onViewAll?: () => void;
   compact?: boolean;
+  companyId?: string;
 }
 
 interface IncidentSummary {
@@ -161,29 +164,68 @@ const STATUS_CONFIG = {
   closed: { label: 'Cerrado', color: 'bg-green-100 text-green-700 dark:bg-green-950/20 dark:text-green-400', icon: '✅' }
 };
 
-export function IncidentDashboardWidget({ 
-  onViewDetails, 
+export function IncidentDashboardWidget({
+  onViewDetails,
   onViewAll,
-  compact = false 
+  compact = false,
+  companyId
 }: IncidentDashboardWidgetProps) {
   const [filterPeriod, setFilterPeriod] = useState<'week' | 'month' | 'quarter' | 'year'>('month');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [incidents, setIncidents] = useState<IncidentSummary[]>(MOCK_INCIDENTS);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadIncidents = async () => {
+      if (!isSupabaseConfigured || !companyId) {
+        if (!cancelled) setIncidents(MOCK_INCIDENTS);
+        return;
+      }
+      try {
+        const data = await fetchIncidentsForCompanies([companyId]);
+        if (!cancelled) {
+          setIncidents(data.map((inc): IncidentSummary => ({
+            id: inc.id,
+            code: inc.code,
+            type: inc.type,
+            title: inc.title,
+            date: inc.date,
+            severity: inc.severity,
+            sector: inc.sector,
+            status: inc.status,
+            daysOpen: inc.daysOpen,
+            affectedWorkers: inc.affectedPersons.length,
+            medicalAttention: inc.medicalAttention,
+            leaveDays: inc.leaveDays,
+            estimatedCost: inc.estimatedCost,
+            actionsTotal: inc.actionsTotal,
+            actionsCompleted: inc.actionsCompleted,
+          })));
+        }
+      } catch (err: any) {
+        console.warn('No se pudo cargar incidentes desde Supabase:', err.message);
+        if (!cancelled) setIncidents(MOCK_INCIDENTS);
+      }
+    };
+    loadIncidents();
+    return () => { cancelled = true; };
+  }, [companyId]);
 
   // Calcular métricas
-  const totalIncidents = MOCK_INCIDENTS.length;
-  const accidents = MOCK_INCIDENTS.filter(i => i.type === 'accident').length;
-  const openIncidents = MOCK_INCIDENTS.filter(i => i.status !== 'closed').length;
-  const closedIncidents = MOCK_INCIDENTS.filter(i => i.status === 'closed').length;
-  const criticalIncidents = MOCK_INCIDENTS.filter(i => i.severity === 'critical').length;
+  const totalIncidents = incidents.length;
+  const accidents = incidents.filter(i => i.type === 'accident').length;
+  const openIncidents = incidents.filter(i => i.status !== 'closed').length;
+  const closedIncidents = incidents.filter(i => i.status === 'closed').length;
+  const criticalIncidents = incidents.filter(i => i.severity === 'critical').length;
   
-  const totalDaysLost = MOCK_INCIDENTS.reduce((sum, inc) => sum + (inc.leaveDays || 0), 0);
-  const totalCost = MOCK_INCIDENTS.reduce((sum, inc) => sum + (inc.estimatedCost || 0), 0);
-  const avgResponseTime = MOCK_INCIDENTS.filter(i => i.status === 'closed').length > 0
-    ? Math.round(MOCK_INCIDENTS.filter(i => i.status === 'closed').reduce((sum, i) => sum + i.daysOpen, 0) / closedIncidents)
+  const totalDaysLost = incidents.reduce((sum, inc) => sum + (inc.leaveDays || 0), 0);
+  const totalCost = incidents.reduce((sum, inc) => sum + (inc.estimatedCost || 0), 0);
+  const avgResponseTime = incidents.filter(i => i.status === 'closed').length > 0
+    ? Math.round(incidents.filter(i => i.status === 'closed').reduce((sum, i) => sum + i.daysOpen, 0) / closedIncidents)
     : 0;
 
-  const withMedicalAttention = MOCK_INCIDENTS.filter(i => i.medicalAttention).length;
-  const affectedWorkers = MOCK_INCIDENTS.reduce((sum, inc) => sum + inc.affectedWorkers, 0);
+  const withMedicalAttention = incidents.filter(i => i.medicalAttention).length;
+  const affectedWorkers = incidents.reduce((sum, inc) => sum + inc.affectedWorkers, 0);
 
   // Calcular tendencias (comparado con mes anterior - mock)
   const previousMonthIncidents = 4; // Mock
@@ -194,13 +236,13 @@ export function IncidentDashboardWidget({
 
   // Incidentes por sector
   const sectorCounts: { [key: string]: number } = {};
-  MOCK_INCIDENTS.forEach(inc => {
+  incidents.forEach(inc => {
     sectorCounts[inc.sector] = (sectorCounts[inc.sector] || 0) + 1;
   });
   const topSector = Object.entries(sectorCounts).sort((a, b) => b[1] - a[1])[0];
 
   // Incidentes recientes filtrados
-  const filteredIncidents = MOCK_INCIDENTS
+  const filteredIncidents = incidents
     .filter(inc => filterStatus === 'all' || inc.status === filterStatus)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, compact ? 3 : 5);

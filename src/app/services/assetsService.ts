@@ -97,6 +97,17 @@ export const fetchAssetsByCompany = async (companyId: string): Promise<Asset[]> 
   return (data || []).map(mapAsset);
 };
 
+export const fetchAssetById = async (assetId: string): Promise<Asset | null> => {
+  const { data, error } = await supabase
+    .from('assets')
+    .select('*')
+    .eq('id', assetId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapAsset(data) : null;
+};
+
 export const createAsset = async (companyId: string, asset: AssetInput): Promise<Asset> => {
   const { data, error } = await supabase
     .from('assets')
