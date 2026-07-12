@@ -209,7 +209,7 @@ CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
   -- Crear perfil
-  INSERT INTO profiles (id, full_name, avatar_url)
+  INSERT INTO public.profiles (id, full_name, avatar_url)
   VALUES (
     NEW.id,
     NEW.raw_user_meta_data->>'full_name',
@@ -218,13 +218,13 @@ BEGIN
   ON CONFLICT (id) DO NOTHING;
 
   -- Crear suscripción free
-  INSERT INTO subscriptions (user_id)
+  INSERT INTO public.subscriptions (user_id)
   VALUES (NEW.id)
   ON CONFLICT (user_id) DO NOTHING;
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
