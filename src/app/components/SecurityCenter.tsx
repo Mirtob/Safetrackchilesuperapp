@@ -1,5 +1,13 @@
-import { useState } from 'react';
-import { 
+import { useState, useEffect } from 'react';
+import {
+  fetchSecurityUsers,
+  toggleSecurityUserActive,
+  sendPasswordReset,
+  revokeOtherSessions,
+  SecurityUser,
+} from '@/app/services/securityService';
+import { isSupabaseConfigured } from '@/app/services/supabase';
+import {
   Shield, 
   Lock, 
   Users, 
@@ -78,6 +86,31 @@ export function SecurityCenter({ onBack }: SecurityCenterProps) {
   const [selectedCompany, setSelectedCompany] = useState<string>('all');
   const [showSensitive, setShowSensitive] = useState(false);
 
+  const [realUsers, setRealUsers] = useState<SecurityUser[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
+  const usingRealUsers = isSupabaseConfigured;
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadUsers = async () => {
+      setIsLoadingUsers(true);
+      if (!usingRealUsers) {
+        if (!cancelled) setIsLoadingUsers(false);
+        return;
+      }
+      try {
+        const data = await fetchSecurityUsers();
+        if (!cancelled) setRealUsers(data);
+      } catch (err: any) {
+        console.warn('No se pudo cargar el acceso de usuario desde Supabase:', err.message);
+      } finally {
+        if (!cancelled) setIsLoadingUsers(false);
+      }
+    };
+    loadUsers();
+    return () => { cancelled = true; };
+  }, [usingRealUsers]);
+
   // Mock data - En producción vendría de Supabase con Row Level Security
   const companies: Company[] = [
     {
@@ -109,7 +142,7 @@ export function SecurityCenter({ onBack }: SecurityCenterProps) {
     }
   ];
 
-  const users: User[] = [
+  const MOCK_USERS: User[] = [
     {
       id: 'u1',
       name: 'Juan Pérez',
@@ -242,6 +275,40 @@ export function SecurityCenter({ onBack }: SecurityCenterProps) {
     });
   };
 
+  const handleToggleRealUser = async (row: SecurityUser) => {
+    if (row.isActive) {
+      const confirmed = window.confirm(
+        `¿Desactivar tu acceso a ${row.companyName}? Perderás acceso a los datos de esta empresa hasta que lo reactives.`
+      );
+      if (!confirmed) return;
+    }
+    try {
+      await toggleSecurityUserActive(row.id, !row.isActive);
+      setRealUsers(prev => prev.map(u => (u.id === row.id ? { ...u, isActive: !u.isActive } : u)));
+      toast.success('Estado de acceso actualizado');
+    } catch (err: any) {
+      toast.error('Error al actualizar el estado', { description: err.message });
+    }
+  };
+
+  const handleResetOwnPassword = async (email: string) => {
+    try {
+      await sendPasswordReset(email);
+      toast.success('Enlace de restablecimiento enviado', { description: `Revisa ${email}` });
+    } catch (err: any) {
+      toast.error('Error al enviar el enlace', { description: err.message });
+    }
+  };
+
+  const handleRevokeOwnOtherSessions = async () => {
+    try {
+      await revokeOtherSessions();
+      toast.success('Tus otras sesiones han sido cerradas');
+    } catch (err: any) {
+      toast.error('Error al cerrar sesiones', { description: err.message });
+    }
+  };
+
   const handleExportLogs = () => {
     toast.success('Exportando logs de auditoría', {
       description: 'Se generará un archivo Excel con todos los registros'
@@ -254,13 +321,77 @@ export function SecurityCenter({ onBack }: SecurityCenterProps) {
     });
   };
 
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = 
+  const filteredUsers = MOCK_USERS.filter(user => {
+    const matchesSearch =
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.email.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCompany = selectedCompany === 'all' || user.companyId === selectedCompany;
     return matchesSearch && matchesCompany;
   });
+
+  const roleLabelFor = (role: string) => {
+    if (role === 'admin') return 'Administrador';
+    if (role === 'manager') return 'Gerente';
+    if (role === 'viewer') return 'Visualizador';
+    return role.charAt(0).toUpperCase() + role.slice(1);
+  };
+  const roleColorFor = (role: string) => {
+    if (role === 'admin') return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
+    if (role === 'manager') return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
+    return 'bg-slate-100 text-slate-700 dark:bg-zinc-700 dark:text-zinc-400';
+  };
+
+  interface UserRow {
+    key: string;
+    name: string;
+    email: string;
+    roleLabel: string;
+    roleColor: string;
+    companyName: string;
+    isActive: boolean;
+    subtitle: string;
+    permissions?: string[];
+    isAdmin: boolean;
+    onToggleStatus: () => void;
+    onResetPassword: () => void;
+    onRevokeAccess: () => void;
+  }
+
+  const displayUserRows: UserRow[] = usingRealUsers
+    ? realUsers
+        .filter(u =>
+          u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          u.email.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+        .map((u): UserRow => ({
+          key: u.id,
+          name: u.name,
+          email: u.email,
+          roleLabel: roleLabelFor(u.role),
+          roleColor: roleColorFor(u.role),
+          companyName: u.companyName,
+          isActive: u.isActive,
+          subtitle: `Miembro desde: ${new Date(u.memberSince).toLocaleDateString('es-CL')}`,
+          isAdmin: u.role === 'admin',
+          onToggleStatus: () => handleToggleRealUser(u),
+          onResetPassword: () => handleResetOwnPassword(u.email),
+          onRevokeAccess: () => handleRevokeOwnOtherSessions(),
+        }))
+    : filteredUsers.map((u): UserRow => ({
+        key: u.id,
+        name: u.name,
+        email: u.email,
+        roleLabel: roleLabelFor(u.role),
+        roleColor: roleColorFor(u.role),
+        companyName: u.companyName,
+        isActive: u.isActive,
+        subtitle: `Último acceso: ${new Date(u.lastLogin).toLocaleString('es-CL')}`,
+        permissions: u.permissions,
+        isAdmin: u.role === 'admin',
+        onToggleStatus: () => handleToggleUserStatus(u.id),
+        onResetPassword: () => handleResetPassword(u.id),
+        onRevokeAccess: () => handleRevokeAccess(u.id),
+      }));
 
   const filteredLogs = accessLogs.filter(log => {
     const matchesSearch = 
@@ -318,7 +449,7 @@ export function SecurityCenter({ onBack }: SecurityCenterProps) {
                 <span className="text-xs font-medium text-blue-900 dark:text-blue-300">Usuarios Activos</span>
               </div>
               <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
-                {users.filter(u => u.isActive).length}
+                {displayUserRows.filter(u => u.isActive).length}
               </div>
             </div>
 
@@ -525,32 +656,52 @@ export function SecurityCenter({ onBack }: SecurityCenterProps) {
 
           {/* Users Tab */}
           <TabsContent value="users" className="space-y-4">
+            {usingRealUsers && (
+              <Card className="p-4 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-blue-800 dark:text-blue-300">
+                    Por las políticas de seguridad de la base de datos, esta vista solo puede mostrar tu propio
+                    acceso a cada empresa — no existe todavía un flujo para invitar a otros miembros del equipo.
+                  </p>
+                </div>
+              </Card>
+            )}
+
             <Card className="p-6 bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                   <UserCheck className="w-5 h-5 text-blue-600" />
-                  Gestión de Usuarios ({filteredUsers.length})
+                  {usingRealUsers ? 'Mi Acceso por Empresa' : 'Gestión de Usuarios'} ({displayUserRows.length})
                 </h3>
-                <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
-                  <Users className="w-4 h-4 mr-2" />
-                  Nuevo Usuario
-                </Button>
+                {!usingRealUsers && (
+                  <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+                    <Users className="w-4 h-4 mr-2" />
+                    Nuevo Usuario
+                  </Button>
+                )}
               </div>
 
+              {isLoadingUsers ? (
+                <div className="flex items-center justify-center py-12 text-slate-400">
+                  <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
+                  Cargando...
+                </div>
+              ) : (
               <ScrollArea className="h-[600px]">
                 <div className="space-y-3">
-                  {filteredUsers.map(user => (
+                  {displayUserRows.map(row => (
                     <div
-                      key={user.id}
+                      key={row.key}
                       className="p-4 border border-slate-200 dark:border-zinc-700 rounded-lg hover:bg-slate-50 dark:hover:bg-zinc-800/50 transition-colors"
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <h4 className="font-semibold text-slate-900 dark:text-white">
-                              {user.name}
+                              {row.name}
                             </h4>
-                            {user.isActive ? (
+                            {row.isActive ? (
                               <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
                                 Activo
                               </Badge>
@@ -561,40 +712,34 @@ export function SecurityCenter({ onBack }: SecurityCenterProps) {
                             )}
                           </div>
                           <p className="text-sm text-slate-600 dark:text-zinc-400 mb-1">
-                            {user.email}
+                            {row.email}
                           </p>
                           <p className="text-xs text-slate-500 dark:text-zinc-500">
-                            {user.companyName}
+                            {row.companyName}
                           </p>
                         </div>
-                        <Badge 
-                          className={
-                            user.role === 'admin' 
-                              ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                              : user.role === 'manager'
-                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                              : 'bg-slate-100 text-slate-700 dark:bg-zinc-700 dark:text-zinc-400'
-                          }
-                        >
-                          {user.role === 'admin' ? 'Administrador' : user.role === 'manager' ? 'Gerente' : 'Visualizador'}
+                        <Badge className={row.roleColor}>
+                          {row.roleLabel}
                         </Badge>
                       </div>
 
-                      <div className="mb-3 flex flex-wrap gap-2">
-                        {user.permissions.map(permission => (
-                          <Badge 
-                            key={permission}
-                            variant="outline"
-                            className="text-xs"
-                          >
-                            {permission}
-                          </Badge>
-                        ))}
-                      </div>
+                      {row.permissions && (
+                        <div className="mb-3 flex flex-wrap gap-2">
+                          {row.permissions.map(permission => (
+                            <Badge
+                              key={permission}
+                              variant="outline"
+                              className="text-xs"
+                            >
+                              {permission}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
 
                       <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-zinc-500 mb-3">
                         <Clock className="w-3 h-3" />
-                        <span>Último acceso: {new Date(user.lastLogin).toLocaleString('es-CL')}</span>
+                        <span>{row.subtitle}</span>
                       </div>
 
                       <Separator className="my-3" />
@@ -602,15 +747,15 @@ export function SecurityCenter({ onBack }: SecurityCenterProps) {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <Button
-                            onClick={() => handleToggleUserStatus(user.id)}
+                            onClick={row.onToggleStatus}
                             size="sm"
                             variant="outline"
                             className="text-xs"
                           >
-                            {user.isActive ? 'Desactivar' : 'Activar'}
+                            {row.isActive ? 'Desactivar' : 'Activar'}
                           </Button>
                           <Button
-                            onClick={() => handleResetPassword(user.id)}
+                            onClick={row.onResetPassword}
                             size="sm"
                             variant="outline"
                             className="text-xs"
@@ -620,18 +765,18 @@ export function SecurityCenter({ onBack }: SecurityCenterProps) {
                           </Button>
                         </div>
                         <Button
-                          onClick={() => handleRevokeAccess(user.id)}
+                          onClick={row.onRevokeAccess}
                           size="sm"
                           variant="outline"
                           className="text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
                         >
                           <Ban className="w-3 h-3 mr-1" />
-                          Revocar Acceso
+                          {usingRealUsers ? 'Cerrar Otras Sesiones' : 'Revocar Acceso'}
                         </Button>
                       </div>
 
                       {/* Warning if user is admin */}
-                      {user.role === 'admin' && (
+                      {row.isAdmin && (
                         <div className="mt-3 p-2 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900 rounded flex items-start gap-2">
                           <AlertTriangle className="w-3 h-3 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5" />
                           <div className="text-xs text-orange-800 dark:text-orange-300">
@@ -643,6 +788,7 @@ export function SecurityCenter({ onBack }: SecurityCenterProps) {
                   ))}
                 </div>
               </ScrollArea>
+              )}
             </Card>
           </TabsContent>
 
