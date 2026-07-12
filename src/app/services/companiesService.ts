@@ -32,6 +32,7 @@ const mapCompany = (row: any): Company => ({
   contactPerson: row.contact_person || '',
   phone: row.phone || '',
   email: row.email || '',
+  mutual: row.mutual || '',
   branches: (row.branches || []).map(mapBranch),
 });
 
@@ -68,6 +69,7 @@ export const createCompany = async (
       contact_person: company.contactPerson || null,
       phone: company.phone || null,
       email: company.email || null,
+      mutual: company.mutual || null,
     })
     .select()
     .single();

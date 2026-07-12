@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import { 
-  ArrowLeft, 
-  Send, 
-  FileText, 
+import { useState, useEffect } from 'react';
+import {
+  ArrowLeft,
+  Send,
+  FileText,
   Clock,
   CheckCircle2,
   Mail,
@@ -20,7 +20,8 @@ import {
   Edit2,
   Plus,
   Database,
-  UserCheck
+  UserCheck,
+  Loader2
 } from 'lucide-react';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
@@ -28,10 +29,15 @@ import { Badge } from '@/app/components/ui/badge';
 import { toast } from 'sonner';
 import { copyToClipboard } from '@/app/utils/clipboard';
 import { SignatureManager } from '@/app/components/SignatureManager';
+import { fetchCompanyDocuments, markTalkDocumentSent } from '@/app/services/safetyTalksService';
+import { isSupabaseConfigured } from '@/app/services/supabase';
 
 interface RemoteSignatureProps {
   onBack: () => void;
   documentData?: any;
+  companyId?: string;
+  companyName?: string;
+  onOpenDocument?: (documentId: string) => void;
 }
 
 type SignatureStatus = 'draft' | 'pending' | 'signed' | 'rejected';
@@ -56,14 +62,7 @@ interface Document {
   integrityHash?: string;
 }
 
-export function RemoteSignature({ onBack, documentData }: RemoteSignatureProps) {
-  const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
-  const [showSendOptions, setShowSendOptions] = useState(false);
-  const [hasPreventionistSignature, setHasPreventionistSignature] = useState(true);
-  const [activeTab, setActiveTab] = useState<'documents' | 'signatures'>('documents');
-
-  // Documentos de ejemplo
-  const [documents, setDocuments] = useState<Document[]>([
+const MOCK_DOCUMENTS: Document[] = [
     {
       id: 'DOC-2026-001',
       title: 'Inspección Planeada - Obra Maipú',
@@ -112,7 +111,72 @@ export function RemoteSignature({ onBack, documentData }: RemoteSignatureProps) 
         manager: { name: 'María González', signed: false }
       }
     }
-  ]);
+];
+
+const categoryLabel: Record<string, string> = { EPP: 'EPP', Charlas: 'Charla', Inducciones: 'Inducción' };
+
+const mapTalkToDocument = (talk: Awaited<ReturnType<typeof fetchCompanyDocuments>>[number], companyName: string): Document => ({
+  id: talk.id,
+  title: talk.title,
+  type: categoryLabel[talk.category] || talk.category,
+  company: companyName,
+  date: talk.date,
+  status: talk.managerApprovalStatus === 'approved'
+    ? 'signed'
+    : talk.managerApprovalStatus === 'rejected'
+      ? 'rejected'
+      : talk.sentAt
+        ? 'pending'
+        : 'draft',
+  sentVia: talk.sentVia,
+  sentTo: talk.sentTo,
+  sentAt: talk.sentAt ? new Date(talk.sentAt).toLocaleString('es-CL') : undefined,
+  signedAt: talk.managerApprovedAt ? new Date(talk.managerApprovedAt).toLocaleString('es-CL') : undefined,
+  signatories: {
+    preventionist: { name: 'Prevencionista', signed: true },
+    manager: {
+      name: 'Gerente',
+      signed: talk.managerApprovalStatus === 'approved',
+      signedAt: talk.managerApprovedAt ? new Date(talk.managerApprovedAt).toLocaleString('es-CL') : undefined,
+    },
+    ...(talk.signaturesCount > 0
+      ? { worker: { name: `${talk.signaturesCount} trabajador(es)`, signed: true } }
+      : {}),
+  },
+  integrityHash: talk.integrityHash,
+});
+
+export function RemoteSignature({ onBack, companyId, companyName, onOpenDocument }: RemoteSignatureProps) {
+  const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
+  const [showSendOptions, setShowSendOptions] = useState(false);
+  const [hasPreventionistSignature, setHasPreventionistSignature] = useState(true);
+  const [activeTab, setActiveTab] = useState<'documents' | 'signatures'>('documents');
+
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [isLoadingDocuments, setIsLoadingDocuments] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadDocuments = async () => {
+      setIsLoadingDocuments(true);
+      if (!isSupabaseConfigured || !companyId) {
+        if (!cancelled) setDocuments(MOCK_DOCUMENTS);
+        if (!cancelled) setIsLoadingDocuments(false);
+        return;
+      }
+      try {
+        const talks = await fetchCompanyDocuments(companyId);
+        if (!cancelled) setDocuments(talks.map(t => mapTalkToDocument(t, companyName || '')));
+      } catch (err: any) {
+        console.warn('No se pudo cargar documentos desde Supabase:', err.message);
+        if (!cancelled) setDocuments(MOCK_DOCUMENTS);
+      } finally {
+        if (!cancelled) setIsLoadingDocuments(false);
+      }
+    };
+    loadDocuments();
+    return () => { cancelled = true; };
+  }, [companyId, companyName]);
 
   const handleSendDocument = async (docId: string, method: 'whatsapp' | 'email') => {
     const doc = documents.find(d => d.id === docId);
@@ -139,15 +203,25 @@ export function RemoteSignature({ onBack, documentData }: RemoteSignatureProps) 
     // Generar link seguro
     const secureLink = `https://safetrack.cl/sign/${Math.random().toString(36).substring(7)}`;
     const integrityHash = `SHA256:${Math.random().toString(36).substring(2, 15)}...`;
+    const managerPhoneRaw = '+56 9 8765 4321'; // En producción, obtener del perfil del gerente
+
+    if (companyId && isSupabaseConfigured) {
+      try {
+        await markTalkDocumentSent(docId, 'whatsapp', managerPhoneRaw);
+      } catch (err: any) {
+        toast.error('Error al registrar el envío', { description: err.message });
+        return;
+      }
+    }
 
     // Actualizar documento
-    setDocuments(docs => docs.map(d => 
-      d.id === docId 
+    setDocuments(docs => docs.map(d =>
+      d.id === docId
         ? {
             ...d,
             status: 'pending' as SignatureStatus,
             sentVia: 'whatsapp', // SIEMPRE WhatsApp
-            sentTo: '+56 9 8765 4321',
+            sentTo: managerPhoneRaw,
             sentAt: new Date().toLocaleString('es-CL'),
             secureLink,
             integrityHash,
@@ -356,7 +430,14 @@ export function RemoteSignature({ onBack, documentData }: RemoteSignatureProps) 
                 Documentos Recientes
               </h2>
 
-              {documents.map((doc) => (
+              {isLoadingDocuments && (
+                <div className="flex items-center justify-center py-12 text-slate-400">
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  Cargando documentos...
+                </div>
+              )}
+
+              {!isLoadingDocuments && documents.map((doc) => (
                 <Card 
                   key={doc.id}
                   className="bg-white dark:bg-zinc-800 border-slate-200 dark:border-zinc-700 hover:shadow-lg transition-all"
@@ -525,14 +606,27 @@ export function RemoteSignature({ onBack, documentData }: RemoteSignatureProps) 
                       )}
                       
                       {doc.status === 'pending' && (
-                        <Button
-                          variant="outline"
-                          onClick={() => copySecureLink(doc.secureLink!)}
-                          className="flex-1"
-                        >
-                          <Copy className="w-4 h-4 mr-2" />
-                          Reenviar Link
-                        </Button>
+                        <>
+                          {onOpenDocument && (
+                            <Button
+                              onClick={() => onOpenDocument(doc.id)}
+                              className="bg-[#FF8C00] hover:bg-orange-600 text-white flex-1"
+                            >
+                              <UserCheck className="w-4 h-4 mr-2" />
+                              Revisar y Firmar
+                            </Button>
+                          )}
+                          {doc.secureLink && (
+                            <Button
+                              variant="outline"
+                              onClick={() => copySecureLink(doc.secureLink!)}
+                              className="flex-1"
+                            >
+                              <Copy className="w-4 h-4 mr-2" />
+                              Reenviar Link
+                            </Button>
+                          )}
+                        </>
                       )}
 
                       {doc.status === 'signed' && (

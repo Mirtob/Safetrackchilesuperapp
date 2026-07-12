@@ -30,6 +30,7 @@ export interface Company {
   contactPerson: string;
   phone: string;
   email: string;
+  mutual?: string;
 }
 
 interface CompanyContextType {

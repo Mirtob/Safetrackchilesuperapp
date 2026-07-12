@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS companies (
   contact_person  TEXT,
   phone           TEXT,
   email           TEXT,
+  mutual          TEXT,
   created_at      TIMESTAMPTZ DEFAULT NOW(),
   updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
@@ -73,38 +74,86 @@ CREATE TABLE IF NOT EXISTS user_company_roles (
 
 -- Trabajadores de cada empresa
 CREATE TABLE IF NOT EXISTS workers (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  company_id  UUID REFERENCES companies(id) ON DELETE CASCADE NOT NULL,
-  branch_id   UUID REFERENCES branches(id) ON DELETE SET NULL,
-  rut         TEXT NOT NULL,
-  full_name   TEXT NOT NULL,
-  email       TEXT,
-  phone       TEXT,
-  job_title   TEXT,
-  is_active   BOOLEAN DEFAULT TRUE,
-  created_at  TIMESTAMPTZ DEFAULT NOW(),
-  updated_at  TIMESTAMPTZ DEFAULT NOW(),
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id        UUID REFERENCES companies(id) ON DELETE CASCADE NOT NULL,
+  branch_id         UUID REFERENCES branches(id) ON DELETE SET NULL,
+  rut               TEXT NOT NULL,
+  full_name         TEXT NOT NULL,
+  email             TEXT,
+  phone             TEXT,
+  job_title         TEXT,
+  department        TEXT,
+  sector            TEXT,
+  address           TEXT,
+  emergency_contact TEXT,
+  emergency_phone   TEXT,
+  contract_type     TEXT DEFAULT 'indefinido' CHECK (contract_type IN ('indefinido', 'plazo-fijo', 'honorarios')),
+  start_date        DATE DEFAULT CURRENT_DATE,
+  is_active         BOOLEAN DEFAULT TRUE,
+  created_at        TIMESTAMPTZ DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(company_id, rut)
 );
 
--- Charlas de seguridad
+-- Activos/equipos de cada empresa (maquinaria, herramientas, vehículos, instalaciones)
+CREATE TABLE IF NOT EXISTS assets (
+  id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id             UUID REFERENCES companies(id) ON DELETE CASCADE NOT NULL,
+  code                   TEXT NOT NULL,
+  name                   TEXT NOT NULL,
+  asset_type             TEXT,
+  category               TEXT DEFAULT 'equipo' CHECK (category IN ('maquinaria', 'herramienta', 'equipo', 'vehiculo', 'instalacion')),
+  brand                  TEXT,
+  model                  TEXT,
+  serial_number          TEXT,
+  sector                 TEXT,
+  location               TEXT,
+  acquisition_date       DATE,
+  acquisition_cost       DECIMAL(12,2),
+  status                 TEXT DEFAULT 'operativo' CHECK (status IN ('operativo', 'mantenimiento', 'fuera-servicio', 'baja')),
+  condition              TEXT DEFAULT 'bueno' CHECK (condition IN ('excelente', 'bueno', 'regular', 'malo')),
+  responsible            TEXT,
+  next_inspection_date   DATE,
+  last_inspection_date   DATE,
+  inspection_frequency   TEXT DEFAULT 'mensual' CHECK (inspection_frequency IN ('semanal', 'quincenal', 'mensual', 'trimestral', 'semestral', 'anual')),
+  notes                  TEXT,
+  created_at             TIMESTAMPTZ DEFAULT NOW(),
+  updated_at             TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(company_id, code)
+);
+
+-- Charlas de seguridad (también respalda charlas EPP e inducciones, y sirve de "documento" para la bóveda)
 CREATE TABLE IF NOT EXISTS safety_talks (
-  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  company_id       UUID REFERENCES companies(id) ON DELETE CASCADE NOT NULL,
-  branch_id        UUID REFERENCES branches(id) ON DELETE SET NULL,
-  created_by       UUID REFERENCES auth.users(id) NOT NULL,
-  title            TEXT NOT NULL,
-  topic            TEXT,
-  talk_date        DATE NOT NULL DEFAULT CURRENT_DATE,
-  duration_minutes INTEGER,
-  location         TEXT,
-  lat              DECIMAL(9,6),
-  lng              DECIMAL(9,6),
-  pdf_url          TEXT,
-  drive_file_id    TEXT,
-  status           TEXT DEFAULT 'completed',
-  created_at       TIMESTAMPTZ DEFAULT NOW(),
-  updated_at       TIMESTAMPTZ DEFAULT NOW()
+  id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id              UUID REFERENCES companies(id) ON DELETE CASCADE NOT NULL,
+  branch_id               UUID REFERENCES branches(id) ON DELETE SET NULL,
+  created_by              UUID REFERENCES auth.users(id) NOT NULL,
+  title                   TEXT NOT NULL,
+  topic                   TEXT,
+  talk_type               TEXT DEFAULT 'talk' CHECK (talk_type IN ('talk', 'epp', 'induction')),
+  talk_date               DATE NOT NULL DEFAULT CURRENT_DATE,
+  duration_minutes        INTEGER,
+  location                TEXT,
+  lat                     DECIMAL(9,6),
+  lng                     DECIMAL(9,6),
+  pdf_url                 TEXT,
+  drive_file_id           TEXT,
+  status                  TEXT DEFAULT 'completed',
+  epp_items               JSONB,
+  -- Firma/aprobación gerencial (ManagerSignaturePortal)
+  manager_approval_status TEXT DEFAULT 'pending' CHECK (manager_approval_status IN ('pending', 'approved', 'rejected')),
+  manager_approved_by     TEXT,
+  manager_approved_at     TIMESTAMPTZ,
+  manager_reject_reason   TEXT,
+  integrity_hash          TEXT,
+  approval_lat            DECIMAL(9,6),
+  approval_lng            DECIMAL(9,6),
+  -- Envío para firma remota (RemoteSignature)
+  sent_via                TEXT CHECK (sent_via IN ('whatsapp', 'email')),
+  sent_to                 TEXT,
+  sent_at                 TIMESTAMPTZ,
+  created_at              TIMESTAMPTZ DEFAULT NOW(),
+  updated_at              TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Firmas digitales (una por trabajador por charla)
@@ -140,6 +189,7 @@ CREATE TRIGGER trg_profiles_updated_at       BEFORE UPDATE ON profiles       FOR
 CREATE TRIGGER trg_companies_updated_at      BEFORE UPDATE ON companies      FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER trg_branches_updated_at       BEFORE UPDATE ON branches       FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER trg_workers_updated_at        BEFORE UPDATE ON workers        FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_assets_updated_at         BEFORE UPDATE ON assets         FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER trg_safety_talks_updated_at   BEFORE UPDATE ON safety_talks   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER trg_subscriptions_updated_at  BEFORE UPDATE ON subscriptions  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
@@ -150,6 +200,7 @@ CREATE INDEX IF NOT EXISTS idx_ucr_user                 ON user_company_roles(us
 CREATE INDEX IF NOT EXISTS idx_ucr_company              ON user_company_roles(company_id);
 CREATE INDEX IF NOT EXISTS idx_workers_company          ON workers(company_id);
 CREATE INDEX IF NOT EXISTS idx_workers_branch           ON workers(branch_id);
+CREATE INDEX IF NOT EXISTS idx_assets_company           ON assets(company_id);
 CREATE INDEX IF NOT EXISTS idx_safety_talks_company     ON safety_talks(company_id);
 CREATE INDEX IF NOT EXISTS idx_safety_talks_created_by  ON safety_talks(created_by);
 CREATE INDEX IF NOT EXISTS idx_signatures_talk          ON signatures(talk_id);
@@ -161,6 +212,7 @@ ALTER TABLE companies        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE branches         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_company_roles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workers          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE assets           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE safety_talks     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE signatures       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subscriptions    ENABLE ROW LEVEL SECURITY;
@@ -186,6 +238,10 @@ CREATE POLICY "roles_own" ON user_company_roles FOR ALL USING (user_id = auth.ui
 
 -- Workers: accesibles si tienes rol en la empresa
 CREATE POLICY "workers_by_company" ON workers FOR ALL
+  USING (company_id IN (SELECT company_id FROM user_company_roles WHERE user_id = auth.uid() AND is_active = TRUE));
+
+-- Assets: accesibles si tienes rol en la empresa
+CREATE POLICY "assets_by_company" ON assets FOR ALL
   USING (company_id IN (SELECT company_id FROM user_company_roles WHERE user_id = auth.uid() AND is_active = TRUE));
 
 -- Safety talks: las de tus empresas

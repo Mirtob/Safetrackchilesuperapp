@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { 
-  CheckCircle2, 
-  FileText, 
+import { useState, useEffect } from 'react';
+import {
+  CheckCircle2,
+  FileText,
   Shield,
   MapPin,
   Clock,
@@ -10,17 +10,40 @@ import {
   AlertTriangle,
   X,
   Check,
-  Download
+  Download,
+  Loader2
 } from 'lucide-react';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { toast } from 'sonner';
+import { fetchTalkDocument, approveTalkDocument, rejectTalkDocument } from '@/app/services/safetyTalksService';
+import { isSupabaseConfigured } from '@/app/services/supabase';
 
 interface ManagerSignaturePortalProps {
   documentId?: string;
+  companyName?: string;
   onBack?: () => void;
 }
+
+const categoryLabel: Record<string, string> = {
+  EPP: 'Entrega de EPP',
+  Charlas: 'Charla de Seguridad',
+  Inducciones: 'Inducción',
+};
+
+const getCurrentPosition = (): Promise<{ lat: number; lng: number } | undefined> =>
+  new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve(undefined);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => resolve(undefined),
+      { timeout: 5000 }
+    );
+  });
 
 interface DocumentPreview {
   id: string;
@@ -34,76 +57,135 @@ interface DocumentPreview {
   recommendations?: string[];
 }
 
-export function ManagerSignaturePortal({ documentId, onBack }: ManagerSignaturePortalProps) {
+const MOCK_DOCUMENT: DocumentPreview = {
+  id: 'DOC-2026-001',
+  title: 'Inspección Planeada - Obra Maipú',
+  type: 'Inspección de Seguridad',
+  company: 'Constructora Los Andes S.A.',
+  date: '26 de Enero, 2026',
+  preventionist: 'Juan Pérez Rodríguez',
+  content: 'Se realizó inspección de seguridad en obra de construcción ubicada en Av. Pajaritos 1234, Maipú. Se verificaron condiciones generales de seguridad, uso de EPP, orden y aseo.',
+  findings: [
+    'Zona de acopio de materiales sin señalización adecuada',
+    '3 trabajadores sin uso correcto de arnés en zona de altura',
+    'Escalera con peldaño deteriorado en sector oriente',
+    'Falta extintor ABC en bodega de herramientas'
+  ],
+  recommendations: [
+    'Instalar señalética de seguridad en zona de acopio (Plazo: 48 horas)',
+    'Capacitación inmediata sobre uso de arnés (Plazo: 24 horas)',
+    'Reemplazar escalera deteriorada (Plazo: Inmediato)',
+    'Adquirir e instalar extintor ABC 10kg (Plazo: 72 horas)'
+  ]
+};
+
+export function ManagerSignaturePortal({ documentId, companyName, onBack }: ManagerSignaturePortalProps) {
   const [isApproving, setIsApproving] = useState(false);
   const [approved, setApproved] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+  const [document, setDocument] = useState<DocumentPreview>({ ...MOCK_DOCUMENT, id: documentId || MOCK_DOCUMENT.id });
+  const [isLoadingDocument, setIsLoadingDocument] = useState(Boolean(documentId && isSupabaseConfigured));
 
-  // Documento de ejemplo
-  const document: DocumentPreview = {
-    id: documentId || 'DOC-2026-001',
-    title: 'Inspección Planeada - Obra Maipú',
-    type: 'Inspección de Seguridad',
-    company: 'Constructora Los Andes S.A.',
-    date: '26 de Enero, 2026',
-    preventionist: 'Juan Pérez Rodríguez',
-    content: 'Se realizó inspección de seguridad en obra de construcción ubicada en Av. Pajaritos 1234, Maipú. Se verificaron condiciones generales de seguridad, uso de EPP, orden y aseo.',
-    findings: [
-      'Zona de acopio de materiales sin señalización adecuada',
-      '3 trabajadores sin uso correcto de arnés en zona de altura',
-      'Escalera con peldaño deteriorado en sector oriente',
-      'Falta extintor ABC en bodega de herramientas'
-    ],
-    recommendations: [
-      'Instalar señalética de seguridad en zona de acopio (Plazo: 48 horas)',
-      'Capacitación inmediata sobre uso de arnés (Plazo: 24 horas)',
-      'Reemplazar escalera deteriorada (Plazo: Inmediato)',
-      'Adquirir e instalar extintor ABC 10kg (Plazo: 72 horas)'
-    ]
-  };
+  const usingRealDocument = Boolean(documentId && isSupabaseConfigured);
 
-  const handleApprove = () => {
+  useEffect(() => {
+    if (!usingRealDocument) {
+      setDocument({ ...MOCK_DOCUMENT, id: documentId || MOCK_DOCUMENT.id });
+      setIsLoadingDocument(false);
+      return;
+    }
+    let cancelled = false;
+    setIsLoadingDocument(true);
+    fetchTalkDocument(documentId!)
+      .then(talk => {
+        if (cancelled) return;
+        setDocument({
+          id: talk.id,
+          title: talk.title,
+          type: categoryLabel[talk.category] || talk.category,
+          company: companyName || '',
+          date: new Date(talk.date).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' }),
+          preventionist: 'Prevencionista a cargo',
+          content: `${categoryLabel[talk.category] || talk.category} "${talk.title}" registrada el ${talk.date}${talk.location ? ` en ${talk.location}` : ''}. Firmas de trabajadores registradas: ${talk.signaturesCount}.`,
+        });
+      })
+      .catch((err: any) => {
+        if (cancelled) return;
+        toast.error('No se pudo cargar el documento', { description: err.message });
+        setDocument({ ...MOCK_DOCUMENT, id: documentId || MOCK_DOCUMENT.id });
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingDocument(false);
+      });
+    return () => { cancelled = true; };
+  }, [documentId, usingRealDocument, companyName]);
+
+  const handleApprove = async () => {
     setIsApproving(true);
-    
-    // Simular proceso de firma digital
-    setTimeout(() => {
-      // Obtener geolocalización (simulada)
-      const location = { lat: -33.5082, lng: -70.7598 };
+
+    try {
+      const location = await getCurrentPosition();
       const timestamp = new Date().toLocaleString('es-CL');
-      const hash = `SHA256:${Math.random().toString(36).substring(2, 15)}...`;
+
+      let hash = `SHA256:${Math.random().toString(36).substring(2, 15)}...`;
+      if (usingRealDocument) {
+        hash = await approveTalkDocument(document.id, 'Gerente', location);
+      } else {
+        await new Promise(resolve => setTimeout(resolve, 1200));
+      }
 
       setApproved(true);
-      setIsApproving(false);
 
       toast.success('Documento Firmado Digitalmente', {
         description: 'Se ha registrado tu aprobación con estampa digital certificada',
       });
 
-      // En producción: enviar firma al backend
       console.log('Firma Digital Aplicada:', {
         documentId: document.id,
-        signedBy: 'María González (Gerente)',
+        signedBy: 'Gerente',
         timestamp,
         location,
         integrityHash: hash
       });
-    }, 2000);
+    } catch (err: any) {
+      toast.error('Error al firmar el documento', { description: err.message });
+    } finally {
+      setIsApproving(false);
+    }
   };
 
-  const handleReject = () => {
+  const handleReject = async () => {
     if (!rejectReason.trim()) {
       toast.error('Debes especificar el motivo del rechazo');
       return;
     }
 
-    toast.success('Documento rechazado', {
-      description: 'El prevencionista recibirá una notificación con tus observaciones',
-    });
+    try {
+      if (usingRealDocument) {
+        await rejectTalkDocument(document.id, rejectReason);
+      }
 
-    setShowRejectModal(false);
-    // En producción: enviar rechazo al backend
+      toast.success('Documento rechazado', {
+        description: 'El prevencionista recibirá una notificación con tus observaciones',
+      });
+
+      setShowRejectModal(false);
+    } catch (err: any) {
+      toast.error('Error al rechazar el documento', { description: err.message });
+    }
   };
+
+  if (isLoadingDocument) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-zinc-900 flex items-center justify-center p-4">
+        <div className="flex items-center gap-2 text-slate-400">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          Cargando documento...
+        </div>
+      </div>
+    );
+  }
 
   if (approved) {
     return (

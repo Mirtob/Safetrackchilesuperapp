@@ -1,4 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import {
+  fetchWorkersByCompany,
+  createWorker,
+  updateWorker,
+  deleteWorker as deleteWorkerInDB,
+} from '@/app/services/workersService';
+import {
+  fetchAssetsByCompany,
+  createAsset,
+  updateAsset,
+  deleteAsset as deleteAssetInDB,
+} from '@/app/services/assetsService';
+import { isSupabaseConfigured } from '@/app/services/supabase';
 import { 
   ArrowLeft, 
   UserPlus, 
@@ -48,6 +61,8 @@ import { toast } from 'sonner';
 
 interface WorkerAndAssetManagementProps {
   onBack: () => void;
+  companyId?: string;
+  companyName?: string;
 }
 
 interface Training {
@@ -115,11 +130,8 @@ interface MaintenanceRecord {
 type FormMode = 'create' | 'edit' | 'view' | null;
 type ManagementType = 'workers' | 'assets';
 
-export function WorkerAndAssetManagement({ onBack }: WorkerAndAssetManagementProps) {
-  const [activeTab, setActiveTab] = useState<ManagementType>('workers');
-  
-  // Estados para trabajadores
-  const [workers, setWorkers] = useState<Worker[]>([
+// Datos de demostración: se usan solo si Supabase no está configurado o no hay empresa seleccionada
+const MOCK_WORKERS: Worker[] = [
     {
       id: 'W001',
       rut: '12.345.678-9',
@@ -192,131 +204,187 @@ export function WorkerAndAssetManagement({ onBack }: WorkerAndAssetManagementPro
         }
       ]
     }
-  ]);
+];
+
+const MOCK_ASSETS: Asset[] = [
+  {
+    id: 'A001',
+    code: 'EXC-2024-001',
+    name: 'Excavadora Hidráulica',
+    type: 'Excavadora',
+    category: 'maquinaria',
+    brand: 'Caterpillar',
+    model: '320D',
+    serialNumber: 'CAT320D2024001',
+    sector: 'Obra Centro',
+    location: 'Patio de Maquinarias - Zona A',
+    acquisitionDate: '2024-03-15',
+    acquisitionCost: 85000000,
+    status: 'operativo',
+    condition: 'excelente',
+    responsible: 'Pedro Martínez López',
+    nextInspectionDate: '2026-02-15',
+    lastInspectionDate: '2026-01-15',
+    inspectionFrequency: 'mensual',
+    alertCount: 0,
+    maintenanceHistory: [
+      {
+        date: '2026-01-10',
+        type: 'preventivo',
+        description: 'Cambio de aceite y filtros',
+        technician: 'Carlos Rojas',
+        cost: 450000
+      }
+    ],
+    documents: ['Manual de usuario', 'Certificado de inspección'],
+    notes: 'Unidad nueva, en excelente estado'
+  },
+  {
+    id: 'A002',
+    code: 'AND-2023-045',
+    name: 'Andamio Tubular',
+    type: 'Andamio',
+    category: 'equipo',
+    brand: 'Layher',
+    model: 'Allround',
+    serialNumber: 'LAY2023045',
+    sector: 'Obra Norte',
+    location: 'Edificio B - Piso 5',
+    acquisitionDate: '2023-08-20',
+    acquisitionCost: 3500000,
+    status: 'operativo',
+    condition: 'bueno',
+    responsible: 'Ana Silva González',
+    nextInspectionDate: '2026-02-01',
+    lastInspectionDate: '2026-01-20',
+    inspectionFrequency: 'quincenal',
+    alertCount: 1,
+    maintenanceHistory: [
+      {
+        date: '2025-12-15',
+        type: 'correctivo',
+        description: 'Reemplazo de plataformas dañadas',
+        technician: 'Luis Fernández',
+        cost: 280000
+      }
+    ],
+    documents: ['Certificado de carga', 'Planos de montaje'],
+    notes: 'Requiere revisión de plataformas'
+  },
+  {
+    id: 'A003',
+    code: 'VEH-2025-010',
+    name: 'Camioneta Pick-up',
+    type: 'Vehículo',
+    category: 'vehiculo',
+    brand: 'Toyota',
+    model: 'Hilux 4x4',
+    serialNumber: 'TOY2025HILUX010',
+    sector: 'Administración',
+    location: 'Estacionamiento Principal',
+    acquisitionDate: '2025-01-10',
+    acquisitionCost: 28000000,
+    status: 'operativo',
+    condition: 'excelente',
+    responsible: 'Roberto Muñoz',
+    nextInspectionDate: '2026-02-10',
+    lastInspectionDate: '2026-01-27',
+    inspectionFrequency: 'mensual',
+    alertCount: 0,
+    maintenanceHistory: [],
+    documents: ['Permiso de circulación', 'Seguro obligatorio', 'Revisión técnica'],
+    notes: 'Vehículo nuevo, primera mantención a los 5.000 km'
+  },
+  {
+    id: 'A004',
+    code: 'EXT-2022-078',
+    name: 'Extintor CO2 10kg',
+    type: 'Extintor',
+    category: 'equipo',
+    brand: 'Kidde',
+    model: 'CO2-10K',
+    serialNumber: 'KID2022078',
+    sector: 'Oficinas Administrativas',
+    location: 'Pasillo Principal - Piso 2',
+    acquisitionDate: '2022-05-15',
+    acquisitionCost: 85000,
+    status: 'operativo',
+    condition: 'regular',
+    responsible: 'Ana Silva González',
+    nextInspectionDate: '2026-01-30',
+    lastInspectionDate: '2025-12-28',
+    inspectionFrequency: 'mensual',
+    alertCount: 2,
+    maintenanceHistory: [
+      {
+        date: '2025-05-15',
+        type: 'preventivo',
+        description: 'Recarga y prueba hidrostática',
+        technician: 'Empresa Extintores Chile',
+        cost: 45000
+      }
+    ],
+    documents: ['Certificado de recarga', 'Hoja de datos de seguridad'],
+    notes: 'Próximo a vencer certificación, programar recarga'
+  }
+];
+
+export function WorkerAndAssetManagement({ onBack, companyId, companyName }: WorkerAndAssetManagementProps) {
+  const [activeTab, setActiveTab] = useState<ManagementType>('workers');
+
+  // Estados para trabajadores
+  const [workers, setWorkers] = useState<Worker[]>([]);
+  const [isLoadingWorkers, setIsLoadingWorkers] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadWorkers = async () => {
+      setIsLoadingWorkers(true);
+      if (!isSupabaseConfigured || !companyId) {
+        if (!cancelled) setWorkers(MOCK_WORKERS);
+        if (!cancelled) setIsLoadingWorkers(false);
+        return;
+      }
+      try {
+        const data = await fetchWorkersByCompany(companyId, companyName || '');
+        if (!cancelled) setWorkers(data);
+      } catch (err: any) {
+        console.warn('No se pudo cargar trabajadores desde Supabase:', err.message);
+        if (!cancelled) setWorkers(MOCK_WORKERS);
+      } finally {
+        if (!cancelled) setIsLoadingWorkers(false);
+      }
+    };
+    loadWorkers();
+    return () => { cancelled = true; };
+  }, [companyId, companyName]);
 
   // Estados para activos
-  const [assets, setAssets] = useState<Asset[]>([
-    {
-      id: 'A001',
-      code: 'EXC-2024-001',
-      name: 'Excavadora Hidráulica',
-      type: 'Excavadora',
-      category: 'maquinaria',
-      brand: 'Caterpillar',
-      model: '320D',
-      serialNumber: 'CAT320D2024001',
-      sector: 'Obra Centro',
-      location: 'Patio de Maquinarias - Zona A',
-      acquisitionDate: '2024-03-15',
-      acquisitionCost: 85000000,
-      status: 'operativo',
-      condition: 'excelente',
-      responsible: 'Pedro Martínez López',
-      nextInspectionDate: '2026-02-15',
-      lastInspectionDate: '2026-01-15',
-      inspectionFrequency: 'mensual',
-      alertCount: 0,
-      maintenanceHistory: [
-        {
-          date: '2026-01-10',
-          type: 'preventivo',
-          description: 'Cambio de aceite y filtros',
-          technician: 'Carlos Rojas',
-          cost: 450000
-        }
-      ],
-      documents: ['Manual de usuario', 'Certificado de inspección'],
-      notes: 'Unidad nueva, en excelente estado'
-    },
-    {
-      id: 'A002',
-      code: 'AND-2023-045',
-      name: 'Andamio Tubular',
-      type: 'Andamio',
-      category: 'equipo',
-      brand: 'Layher',
-      model: 'Allround',
-      serialNumber: 'LAY2023045',
-      sector: 'Obra Norte',
-      location: 'Edificio B - Piso 5',
-      acquisitionDate: '2023-08-20',
-      acquisitionCost: 3500000,
-      status: 'operativo',
-      condition: 'bueno',
-      responsible: 'Ana Silva González',
-      nextInspectionDate: '2026-02-01',
-      lastInspectionDate: '2026-01-20',
-      inspectionFrequency: 'quincenal',
-      alertCount: 1,
-      maintenanceHistory: [
-        {
-          date: '2025-12-15',
-          type: 'correctivo',
-          description: 'Reemplazo de plataformas dañadas',
-          technician: 'Luis Fernández',
-          cost: 280000
-        }
-      ],
-      documents: ['Certificado de carga', 'Planos de montaje'],
-      notes: 'Requiere revisión de plataformas'
-    },
-    {
-      id: 'A003',
-      code: 'VEH-2025-010',
-      name: 'Camioneta Pick-up',
-      type: 'Vehículo',
-      category: 'vehiculo',
-      brand: 'Toyota',
-      model: 'Hilux 4x4',
-      serialNumber: 'TOY2025HILUX010',
-      sector: 'Administración',
-      location: 'Estacionamiento Principal',
-      acquisitionDate: '2025-01-10',
-      acquisitionCost: 28000000,
-      status: 'operativo',
-      condition: 'excelente',
-      responsible: 'Roberto Muñoz',
-      nextInspectionDate: '2026-02-10',
-      lastInspectionDate: '2026-01-27',
-      inspectionFrequency: 'mensual',
-      alertCount: 0,
-      maintenanceHistory: [],
-      documents: ['Permiso de circulación', 'Seguro obligatorio', 'Revisión técnica'],
-      notes: 'Vehículo nuevo, primera mantención a los 5.000 km'
-    },
-    {
-      id: 'A004',
-      code: 'EXT-2022-078',
-      name: 'Extintor CO2 10kg',
-      type: 'Extintor',
-      category: 'equipo',
-      brand: 'Kidde',
-      model: 'CO2-10K',
-      serialNumber: 'KID2022078',
-      sector: 'Oficinas Administrativas',
-      location: 'Pasillo Principal - Piso 2',
-      acquisitionDate: '2022-05-15',
-      acquisitionCost: 85000,
-      status: 'operativo',
-      condition: 'regular',
-      responsible: 'Ana Silva González',
-      nextInspectionDate: '2026-01-30',
-      lastInspectionDate: '2025-12-28',
-      inspectionFrequency: 'mensual',
-      alertCount: 2,
-      maintenanceHistory: [
-        {
-          date: '2025-05-15',
-          type: 'preventivo',
-          description: 'Recarga y prueba hidrostática',
-          technician: 'Empresa Extintores Chile',
-          cost: 45000
-        }
-      ],
-      documents: ['Certificado de recarga', 'Hoja de datos de seguridad'],
-      notes: 'Próximo a vencer certificación, programar recarga'
-    }
-  ]);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [isLoadingAssets, setIsLoadingAssets] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadAssets = async () => {
+      setIsLoadingAssets(true);
+      if (!isSupabaseConfigured || !companyId) {
+        if (!cancelled) setAssets(MOCK_ASSETS);
+        if (!cancelled) setIsLoadingAssets(false);
+        return;
+      }
+      try {
+        const data = await fetchAssetsByCompany(companyId);
+        if (!cancelled) setAssets(data);
+      } catch (err: any) {
+        console.warn('No se pudo cargar activos desde Supabase:', err.message);
+        if (!cancelled) setAssets(MOCK_ASSETS);
+      } finally {
+        if (!cancelled) setIsLoadingAssets(false);
+      }
+    };
+    loadAssets();
+    return () => { cancelled = true; };
+  }, [companyId]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive' | 'alerts'>('all');
@@ -327,7 +395,7 @@ export function WorkerAndAssetManagement({ onBack }: WorkerAndAssetManagementPro
     rut: '',
     name: '',
     position: '',
-    company: 'Constructora Los Andes S.A.',
+    company: companyName || '',
     department: '',
     sector: '',
     phone: '',
@@ -407,7 +475,7 @@ export function WorkerAndAssetManagement({ onBack }: WorkerAndAssetManagementPro
       rut: '',
       name: '',
       position: '',
-      company: 'Constructora Los Andes S.A.',
+      company: companyName || '',
       department: '',
       sector: '',
       phone: '',
@@ -451,50 +519,134 @@ export function WorkerAndAssetManagement({ onBack }: WorkerAndAssetManagementPro
     });
   };
 
-  const handleSaveWorker = () => {
+  const handleSaveWorker = async () => {
     if (!workerFormData.rut || !workerFormData.name) {
       toast.error('Por favor complete los campos obligatorios');
       return;
     }
 
-    if (formMode === 'create') {
-      const newWorker: Worker = {
-        id: `W${String(workers.length + 1).padStart(3, '0')}`,
-        ...workerFormData as Worker
-      };
-      setWorkers([...workers, newWorker]);
-      toast.success('Trabajador creado exitosamente');
-    } else if (formMode === 'edit' && selectedWorker) {
-      setWorkers(workers.map(w => 
-        w.id === selectedWorker.id ? { ...w, ...workerFormData } : w
-      ));
-      toast.success('Trabajador actualizado exitosamente');
+    const canPersist = Boolean(companyId && isSupabaseConfigured);
+
+    try {
+      if (formMode === 'create') {
+        if (canPersist) {
+          const created = await createWorker(companyId!, {
+            rut: workerFormData.rut!,
+            name: workerFormData.name!,
+            position: workerFormData.position || '',
+            department: workerFormData.department || '',
+            sector: workerFormData.sector || '',
+            phone: workerFormData.phone || '',
+            email: workerFormData.email || '',
+            address: workerFormData.address || '',
+            emergencyContact: workerFormData.emergencyContact || '',
+            emergencyPhone: workerFormData.emergencyPhone || '',
+            contractType: workerFormData.contractType || 'indefinido',
+            startDate: workerFormData.startDate || '',
+            status: workerFormData.status || 'active',
+          });
+          setWorkers([...workers, { ...created, company: companyName || '' }]);
+        } else {
+          const newWorker: Worker = {
+            id: `W${String(workers.length + 1).padStart(3, '0')}`,
+            ...workerFormData as Worker
+          };
+          setWorkers([...workers, newWorker]);
+        }
+        toast.success('Trabajador creado exitosamente');
+      } else if (formMode === 'edit' && selectedWorker) {
+        if (canPersist) {
+          const updated = await updateWorker(selectedWorker.id, {
+            rut: workerFormData.rut!,
+            name: workerFormData.name!,
+            position: workerFormData.position || '',
+            department: workerFormData.department || '',
+            sector: workerFormData.sector || '',
+            phone: workerFormData.phone || '',
+            email: workerFormData.email || '',
+            address: workerFormData.address || '',
+            emergencyContact: workerFormData.emergencyContact || '',
+            emergencyPhone: workerFormData.emergencyPhone || '',
+            contractType: workerFormData.contractType || 'indefinido',
+            startDate: workerFormData.startDate || '',
+            status: workerFormData.status || 'active',
+          });
+          setWorkers(workers.map(w =>
+            w.id === selectedWorker.id ? { ...updated, company: companyName || '' } : w
+          ));
+        } else {
+          setWorkers(workers.map(w =>
+            w.id === selectedWorker.id ? { ...w, ...workerFormData } : w
+          ));
+        }
+        toast.success('Trabajador actualizado exitosamente');
+      }
+    } catch (err: any) {
+      toast.error('Error al guardar el trabajador', { description: err.message });
+      return;
     }
 
     setFormMode(null);
     setSelectedWorker(null);
   };
 
-  const handleSaveAsset = () => {
+  const handleSaveAsset = async () => {
     if (!assetFormData.code || !assetFormData.name || !assetFormData.type) {
       toast.error('Por favor complete los campos obligatorios');
       return;
     }
 
-    if (formMode === 'create') {
-      const newAsset: Asset = {
-        id: `A${String(assets.length + 1).padStart(3, '0')}`,
-        ...assetFormData as Asset
-      };
-      setAssets([...assets, newAsset]);
-      toast.success('Activo creado exitosamente', {
-        description: 'El activo está listo para inspecciones'
-      });
-    } else if (formMode === 'edit' && selectedAsset) {
-      setAssets(assets.map(a => 
-        a.id === selectedAsset.id ? { ...a, ...assetFormData } : a
-      ));
-      toast.success('Activo actualizado exitosamente');
+    const canPersist = Boolean(companyId && isSupabaseConfigured);
+    const assetInput = {
+      code: assetFormData.code!,
+      name: assetFormData.name!,
+      type: assetFormData.type!,
+      category: assetFormData.category || 'equipo',
+      brand: assetFormData.brand || '',
+      model: assetFormData.model || '',
+      serialNumber: assetFormData.serialNumber || '',
+      sector: assetFormData.sector || '',
+      location: assetFormData.location || '',
+      acquisitionDate: assetFormData.acquisitionDate || '',
+      acquisitionCost: assetFormData.acquisitionCost || 0,
+      status: assetFormData.status || 'operativo',
+      condition: assetFormData.condition || 'excelente',
+      responsible: assetFormData.responsible || '',
+      nextInspectionDate: assetFormData.nextInspectionDate || '',
+      lastInspectionDate: assetFormData.lastInspectionDate || '',
+      inspectionFrequency: assetFormData.inspectionFrequency || 'mensual',
+      notes: assetFormData.notes || '',
+    } as const;
+
+    try {
+      if (formMode === 'create') {
+        if (canPersist) {
+          const created = await createAsset(companyId!, assetInput);
+          setAssets([...assets, created]);
+        } else {
+          const newAsset: Asset = {
+            id: `A${String(assets.length + 1).padStart(3, '0')}`,
+            ...assetFormData as Asset
+          };
+          setAssets([...assets, newAsset]);
+        }
+        toast.success('Activo creado exitosamente', {
+          description: 'El activo está listo para inspecciones'
+        });
+      } else if (formMode === 'edit' && selectedAsset) {
+        if (canPersist) {
+          const updated = await updateAsset(selectedAsset.id, assetInput);
+          setAssets(assets.map(a => (a.id === selectedAsset.id ? updated : a)));
+        } else {
+          setAssets(assets.map(a =>
+            a.id === selectedAsset.id ? { ...a, ...assetFormData } : a
+          ));
+        }
+        toast.success('Activo actualizado exitosamente');
+      }
+    } catch (err: any) {
+      toast.error('Error al guardar el activo', { description: err.message });
+      return;
     }
 
     setFormMode(null);
@@ -513,14 +665,28 @@ export function WorkerAndAssetManagement({ onBack }: WorkerAndAssetManagementPro
     setAssetFormData(asset);
   };
 
-  const handleDeleteWorker = (workerId: string) => {
-    setWorkers(workers.filter(w => w.id !== workerId));
-    toast.success('Trabajador eliminado');
+  const handleDeleteWorker = async (workerId: string) => {
+    try {
+      if (companyId && isSupabaseConfigured) {
+        await deleteWorkerInDB(workerId);
+      }
+      setWorkers(workers.filter(w => w.id !== workerId));
+      toast.success('Trabajador eliminado');
+    } catch (err: any) {
+      toast.error('Error al eliminar el trabajador', { description: err.message });
+    }
   };
 
-  const handleDeleteAsset = (assetId: string) => {
-    setAssets(assets.filter(a => a.id !== assetId));
-    toast.success('Activo eliminado');
+  const handleDeleteAsset = async (assetId: string) => {
+    try {
+      if (companyId && isSupabaseConfigured) {
+        await deleteAssetInDB(assetId);
+      }
+      setAssets(assets.filter(a => a.id !== assetId));
+      toast.success('Activo eliminado');
+    } catch (err: any) {
+      toast.error('Error al eliminar el activo', { description: err.message });
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -683,7 +849,13 @@ export function WorkerAndAssetManagement({ onBack }: WorkerAndAssetManagementPro
         )}
 
         {/* Lista de Trabajadores */}
-        {activeTab === 'workers' && !formMode && (
+        {activeTab === 'workers' && !formMode && isLoadingWorkers && (
+          <div className="flex items-center justify-center py-12 text-slate-400">
+            <Clock className="w-5 h-5 mr-2 animate-spin" />
+            Cargando trabajadores...
+          </div>
+        )}
+        {activeTab === 'workers' && !formMode && !isLoadingWorkers && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {filteredWorkers.map(worker => (
               <Card
@@ -755,7 +927,13 @@ export function WorkerAndAssetManagement({ onBack }: WorkerAndAssetManagementPro
         )}
 
         {/* Lista de Activos */}
-        {activeTab === 'assets' && !formMode && (
+        {activeTab === 'assets' && !formMode && isLoadingAssets && (
+          <div className="flex items-center justify-center py-12 text-slate-400">
+            <Clock className="w-5 h-5 mr-2 animate-spin" />
+            Cargando activos...
+          </div>
+        )}
+        {activeTab === 'assets' && !formMode && !isLoadingAssets && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {filteredAssets.map(asset => (
               <Card

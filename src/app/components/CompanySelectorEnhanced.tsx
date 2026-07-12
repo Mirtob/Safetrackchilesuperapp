@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { 
-  Building2, 
-  ChevronRight, 
-  AlertCircle, 
+import {
+  Building2,
+  ChevronRight,
+  AlertCircle,
   CheckCircle,
   Plus,
   X,
@@ -14,7 +14,8 @@ import {
   Users,
   Shield,
   Briefcase,
-  LogOut
+  LogOut,
+  Loader2
 } from 'lucide-react';
 import { Card } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
@@ -22,89 +23,27 @@ import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { toast } from 'sonner';
-
-interface Company {
-  id: string;
-  name: string;
-  rut: string;
-  branches: number;
-  complianceLevel: 'high' | 'medium' | 'low';
-  compliancePercentage: number;
-  mutual: string;
-  lastInspection: string;
-  address?: string;
-  phone?: string;
-  email?: string;
-  legalRepresentative?: string;
-}
+import { Company } from '@/app/context/CompanyContext';
 
 interface CompanySelectorEnhancedProps {
+  companies: Company[];
+  isLoading?: boolean;
   onSelectCompany: (companyId: string) => void;
+  onCreateCompany: (company: Omit<Company, 'id' | 'branches'>) => Promise<Company>;
   onOpenProfessionalPortfolio?: () => void;
   onLogout?: () => void;
 }
 
-export function CompanySelectorEnhanced({ onSelectCompany, onOpenProfessionalPortfolio, onLogout }: CompanySelectorEnhancedProps) {
-  const [companies, setCompanies] = useState<Company[]>([
-    {
-      id: '1',
-      name: 'Constructora Los Andes S.A.',
-      rut: '76.123.456-7',
-      branches: 5,
-      complianceLevel: 'high',
-      compliancePercentage: 92,
-      mutual: 'ACHS',
-      lastInspection: 'Hace 2 días',
-      address: 'Av. Libertador Bernardo O\'Higgins 1234, Santiago',
-      phone: '+56 2 2234 5678',
-      email: 'contacto@losandes.cl',
-      legalRepresentative: 'Carlos Pérez González'
-    },
-    {
-      id: '2',
-      name: 'Minera Atacama Norte',
-      rut: '88.765.432-1',
-      branches: 3,
-      complianceLevel: 'medium',
-      compliancePercentage: 68,
-      mutual: 'Mutual de Seguridad',
-      lastInspection: 'Hace 1 semana',
-      address: 'Ruta 5 Norte Km 1250, Calama',
-      phone: '+56 55 2345 6789',
-      email: 'info@mineraatacama.cl',
-      legalRepresentative: 'María Silva Rojas'
-    },
-    {
-      id: '3',
-      name: 'Transportes y Logística Cruz del Sur',
-      rut: '77.654.321-9',
-      branches: 8,
-      complianceLevel: 'low',
-      compliancePercentage: 45,
-      mutual: 'IST',
-      lastInspection: 'Hace 3 semanas',
-      address: 'Av. España 567, Puerto Montt',
-      phone: '+56 65 2456 7890',
-      email: 'contacto@cruzdelsur.cl',
-      legalRepresentative: 'Roberto Muñoz Castro'
-    },
-    {
-      id: '4',
-      name: 'Forestal Bio-Bio Ltda.',
-      rut: '79.987.654-3',
-      branches: 4,
-      complianceLevel: 'high',
-      compliancePercentage: 88,
-      mutual: 'ACHS',
-      lastInspection: 'Hace 1 día',
-      address: 'Camino a Nacimiento Km 15, Los Ángeles',
-      phone: '+56 43 2567 8901',
-      email: 'gerencia@forestalbiobio.cl',
-      legalRepresentative: 'Ana González Pérez'
-    }
-  ]);
-
+export function CompanySelectorEnhanced({
+  companies,
+  isLoading,
+  onSelectCompany,
+  onCreateCompany,
+  onOpenProfessionalPortfolio,
+  onLogout
+}: CompanySelectorEnhancedProps) {
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     rut: '',
@@ -115,27 +54,26 @@ export function CompanySelectorEnhanced({ onSelectCompany, onOpenProfessionalPor
     mutual: 'ACHS'
   });
 
-  const getStatusColor = (level: Company['complianceLevel']) => {
+  const getStatusColor = (level: Company['riskLevel']) => {
     switch (level) {
-      case 'high':
+      case 'Bajo':
         return 'bg-green-500';
-      case 'medium':
+      case 'Medio':
         return 'bg-yellow-500';
-      case 'low':
+      case 'Alto':
         return 'bg-red-500';
     }
   };
 
-  const getStatusIcon = (level: Company['complianceLevel']) => {
-    return level === 'high' ? (
+  const getStatusIcon = (level: Company['riskLevel']) => {
+    return level === 'Bajo' ? (
       <CheckCircle className="w-5 h-5 text-green-500" />
     ) : (
       <AlertCircle className="w-5 h-5 text-red-500" />
     );
   };
 
-  const handleCreateCompany = () => {
-    // Validaciones
+  const handleCreateCompany = async () => {
     if (!formData.name.trim()) {
       toast.error('Nombre requerido', { description: 'Ingresa el nombre de la empresa' });
       return;
@@ -153,40 +91,36 @@ export function CompanySelectorEnhanced({ onSelectCompany, onOpenProfessionalPor
       return;
     }
 
-    // Crear nueva empresa
-    const newCompany: Company = {
-      id: String(companies.length + 1),
-      name: formData.name,
-      rut: formData.rut,
-      branches: 1,
-      complianceLevel: 'medium',
-      compliancePercentage: 0,
-      mutual: formData.mutual,
-      lastInspection: 'Sin inspecciones',
-      address: formData.address,
-      phone: formData.phone,
-      email: formData.email,
-      legalRepresentative: formData.legalRepresentative
-    };
+    setIsSaving(true);
+    try {
+      const newCompany = await onCreateCompany({
+        name: formData.name,
+        rut: formData.rut,
+        address: formData.address,
+        industry: 'General',
+        riskLevel: 'Medio',
+        workerCount: 0,
+        contractStart: new Date().toISOString().split('T')[0],
+        contactPerson: formData.legalRepresentative,
+        phone: formData.phone,
+        email: formData.email,
+        mutual: formData.mutual,
+      });
 
-    setCompanies(prev => [...prev, newCompany]);
-    
-    toast.success('✅ Empresa creada exitosamente', {
-      description: `${newCompany.name} ha sido agregada al sistema`,
-      duration: 4000
-    });
+      toast.success('✅ Empresa creada exitosamente', {
+        description: `${newCompany.name} ha sido agregada al sistema`,
+        duration: 4000
+      });
 
-    // Limpiar formulario y cerrar
-    setFormData({
-      name: '',
-      rut: '',
-      address: '',
-      phone: '',
-      email: '',
-      legalRepresentative: '',
-      mutual: 'ACHS'
-    });
-    setShowCreateForm(false);
+      setFormData({
+        name: '', rut: '', address: '', phone: '', email: '', legalRepresentative: '', mutual: 'ACHS'
+      });
+      setShowCreateForm(false);
+    } catch (err: any) {
+      toast.error('Error al crear la empresa', { description: err.message });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -356,13 +290,19 @@ export function CompanySelectorEnhanced({ onSelectCompany, onOpenProfessionalPor
               <div className="flex gap-3 pt-6 border-t border-slate-200 dark:border-zinc-700">
                 <Button
                   onClick={handleCreateCompany}
+                  disabled={isSaving}
                   className="flex-1 bg-blue-600 hover:bg-blue-700"
                 >
-                  <Save className="w-4 h-4 mr-2" />
+                  {isSaving ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4 mr-2" />
+                  )}
                   Crear Empresa
                 </Button>
                 <Button
                   onClick={handleCancel}
+                  disabled={isSaving}
                   variant="outline"
                   className="flex-1"
                 >
@@ -428,7 +368,7 @@ export function CompanySelectorEnhanced({ onSelectCompany, onOpenProfessionalPor
 
         {/* Professional Portfolio Card - Destacado */}
         {onOpenProfessionalPortfolio && (
-          <Card 
+          <Card
             onClick={onOpenProfessionalPortfolio}
             className="bg-gradient-to-br from-[#FF8C00] to-[#FF8C00]/80 border-[#FF8C00] p-6 mb-6 cursor-pointer hover:shadow-xl transition-all active:scale-98"
           >
@@ -478,6 +418,21 @@ export function CompanySelectorEnhanced({ onSelectCompany, onOpenProfessionalPor
           <div className="flex-1 h-px bg-slate-200 dark:bg-zinc-700" />
         </div>
 
+        {isLoading && (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+          </div>
+        )}
+
+        {!isLoading && companies.length === 0 && (
+          <Card className="p-8 text-center bg-white dark:bg-zinc-800 border-slate-200 dark:border-zinc-700">
+            <Building2 className="w-10 h-10 mx-auto text-slate-300 dark:text-zinc-600 mb-3" />
+            <p className="text-slate-600 dark:text-zinc-400 text-sm">
+              Aún no tienes empresas registradas. Crea la primera con "Nueva Empresa".
+            </p>
+          </Card>
+        )}
+
         {/* Company Cards */}
         <div className="space-y-3">
           {companies.map((company) => (
@@ -508,42 +463,42 @@ export function CompanySelectorEnhanced({ onSelectCompany, onOpenProfessionalPor
                   <div>
                     <p className="text-xs text-slate-600 dark:text-zinc-400 mb-1">Sucursales</p>
                     <p className="text-sm font-semibold text-slate-900 dark:text-white">
-                      {company.branches}
+                      {company.branches?.length ?? 0}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-600 dark:text-zinc-400 mb-1">Mutualidad</p>
+                    <p className="text-xs text-slate-600 dark:text-zinc-400 mb-1">Trabajadores</p>
                     <p className="text-sm font-semibold text-slate-900 dark:text-white">
-                      {company.mutual}
+                      {company.workerCount}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-600 dark:text-zinc-400 mb-1">Última inspección</p>
+                    <p className="text-xs text-slate-600 dark:text-zinc-400 mb-1">Rubro</p>
                     <p className="text-sm font-semibold text-slate-900 dark:text-white">
-                      {company.lastInspection}
+                      {company.industry}
                     </p>
                   </div>
                 </div>
 
-                {/* Compliance */}
+                {/* Risk level */}
                 <div className="flex items-center gap-3">
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs text-slate-600 dark:text-zinc-400">
-                        Nivel de Cumplimiento
+                        Nivel de Riesgo
                       </span>
-                      <span className="text-xs font-semibold text-slate-900 dark:text-white">
-                        {company.compliancePercentage}%
-                      </span>
+                      <Badge variant="outline" className="text-xs">
+                        {company.riskLevel}
+                      </Badge>
                     </div>
                     <div className="h-2 bg-slate-200 dark:bg-zinc-700 rounded-full overflow-hidden">
                       <div
-                        className={`h-full ${getStatusColor(company.complianceLevel)} transition-all`}
-                        style={{ width: `${company.compliancePercentage}%` }}
+                        className={`h-full ${getStatusColor(company.riskLevel)} transition-all`}
+                        style={{ width: company.riskLevel === 'Alto' ? '85%' : company.riskLevel === 'Medio' ? '55%' : '25%' }}
                       />
                     </div>
                   </div>
-                  {getStatusIcon(company.complianceLevel)}
+                  {getStatusIcon(company.riskLevel)}
                 </div>
               </div>
             </Card>

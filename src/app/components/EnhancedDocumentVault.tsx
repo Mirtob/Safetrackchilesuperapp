@@ -1,9 +1,9 @@
-import { useState } from 'react';
-import { 
-  ArrowLeft, 
-  FileText, 
-  Download, 
-  Search, 
+import { useState, useEffect } from 'react';
+import {
+  ArrowLeft,
+  FileText,
+  Download,
+  Search,
   FolderOpen,
   Shield,
   CheckCircle2,
@@ -18,17 +18,21 @@ import {
   Package,
   MessageSquare,
   ClipboardCheck,
+  Loader2,
   X
 } from 'lucide-react';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Input } from '@/app/components/ui/input';
+import { fetchCompanyDocuments } from '@/app/services/safetyTalksService';
+import { isSupabaseConfigured } from '@/app/services/supabase';
 
 interface EnhancedDocumentVaultProps {
   onBack: () => void;
   isOnline: boolean;
   selectedCompany: string; // NUEVO: Recibir empresa seleccionada
+  companyId?: string;
 }
 
 interface SignatureAvatar {
@@ -43,7 +47,7 @@ interface DocumentItem {
   name: string;
   company: string;
   year: number;
-  category: 'EPP' | 'Charlas' | 'Informes' | 'Inspecciones';
+  category: 'EPP' | 'Charlas' | 'Inducciones' | 'Informes' | 'Inspecciones';
   type: 'PDF' | 'XLSX' | 'DOCX';
   size: string;
   date: string;
@@ -55,7 +59,7 @@ interface DocumentItem {
 }
 
 // Documentos organizados por [Empresa] > [Año] > [Categoría]
-const documents: DocumentItem[] = [
+const MOCK_DOCUMENTS: DocumentItem[] = [
   // Constructora Los Andes - 2026
   {
     id: 'CLA-2026-EPP-001',
@@ -184,17 +188,63 @@ const documents: DocumentItem[] = [
 
 type ViewMode = 'companies' | 'years' | 'categories' | 'documents';
 
-export function EnhancedDocumentVault({ onBack, isOnline, selectedCompany }: EnhancedDocumentVaultProps) {
+const mapTalkToDocumentItem = (talk: Awaited<ReturnType<typeof fetchCompanyDocuments>>[number], companyName: string): DocumentItem => ({
+  id: talk.id,
+  name: talk.title,
+  company: companyName,
+  year: new Date(talk.date).getFullYear(),
+  category: talk.category,
+  type: 'PDF',
+  size: '—',
+  date: talk.date,
+  signatures: [
+    { name: 'Prevencionista', role: 'preventionist', signed: true, color: 'blue' },
+    { name: 'Gerente', role: 'manager', signed: talk.managerApprovalStatus === 'approved', color: 'purple' },
+    ...(talk.signaturesCount > 0
+      ? [{ name: `${talk.signaturesCount} trabajador(es)`, role: 'worker' as const, signed: true, color: 'green' }]
+      : []),
+  ],
+  offlineAvailable: true,
+  legallyArchived: talk.managerApprovalStatus === 'approved',
+});
+
+export function EnhancedDocumentVault({ onBack, isOnline, selectedCompany, companyId }: EnhancedDocumentVaultProps) {
   // NUEVO: Iniciar directamente en vista de años ya que la empresa viene del prop
   const [viewMode, setViewMode] = useState<ViewMode>('years');
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  
+
   const [searchQuery, setSearchQuery] = useState('');
   const [filterRUT, setFilterRUT] = useState('');
   const [filterDate, setFilterDate] = useState('');
   const [filterType, setFilterType] = useState<string>('');
   const [showFilters, setShowFilters] = useState(false);
+
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [isLoadingDocuments, setIsLoadingDocuments] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadDocuments = async () => {
+      setIsLoadingDocuments(true);
+      if (!isSupabaseConfigured || !companyId) {
+        if (!cancelled) setDocuments(MOCK_DOCUMENTS);
+        if (!cancelled) setIsLoadingDocuments(false);
+        return;
+      }
+      try {
+        const talks = await fetchCompanyDocuments(companyId);
+        if (!cancelled) setDocuments(talks.map(t => mapTalkToDocumentItem(t, selectedCompany)));
+      } catch (err: any) {
+        console.warn('No se pudo cargar documentos desde Supabase:', err.message);
+        if (!cancelled) setDocuments(MOCK_DOCUMENTS);
+      } finally {
+        if (!cancelled) setIsLoadingDocuments(false);
+      }
+    };
+    loadDocuments();
+    return () => { cancelled = true; };
+  }, [companyId, selectedCompany]);
 
   // Navegación - La empresa ya no se puede cambiar internamente
   const years = Array.from(new Set(documents.filter(d => d.company === selectedCompany).map(d => d.year))).sort((a, b) => b - a);
@@ -444,8 +494,15 @@ export function EnhancedDocumentVault({ onBack, isOnline, selectedCompany }: Enh
           </div>
         </Card>
 
+        {isLoadingDocuments && (
+          <div className="flex items-center justify-center py-12 text-slate-400">
+            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+            Cargando documentos...
+          </div>
+        )}
+
         {/* Vista de Empresas */}
-        {viewMode === 'companies' && (
+        {!isLoadingDocuments && viewMode === 'companies' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {companies.map((company) => {
               const companyDocs = documents.filter(d => d.company === company);
@@ -476,7 +533,7 @@ export function EnhancedDocumentVault({ onBack, isOnline, selectedCompany }: Enh
         )}
 
         {/* Vista de Años */}
-        {viewMode === 'years' && (
+        {!isLoadingDocuments && viewMode === 'years' && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {years.map((year) => {
               const yearDocs = documents.filter(d => d.company === selectedCompany && d.year === year);
@@ -500,7 +557,7 @@ export function EnhancedDocumentVault({ onBack, isOnline, selectedCompany }: Enh
         )}
 
         {/* Vista de Categorías */}
-        {viewMode === 'categories' && (
+        {!isLoadingDocuments && viewMode === 'categories' && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {categories.map((category) => {
               const categoryDocs = documents.filter(d => 
@@ -542,7 +599,7 @@ export function EnhancedDocumentVault({ onBack, isOnline, selectedCompany }: Enh
         )}
 
         {/* Vista de Documentos */}
-        {viewMode === 'documents' && (
+        {!isLoadingDocuments && viewMode === 'documents' && (
           <Card className="bg-white dark:bg-zinc-800 border-slate-200 dark:border-zinc-700">
             <div className="divide-y divide-slate-200 dark:divide-zinc-700">
               {filteredDocuments.length === 0 ? (

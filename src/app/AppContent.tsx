@@ -25,7 +25,6 @@ import { DocumentVault } from '@/app/components/DocumentVault';
 import { RemoteSignature } from '@/app/components/RemoteSignature';
 import { ManagerSignaturePortal } from '@/app/components/ManagerSignaturePortal';
 import { EnhancedDocumentVault } from '@/app/components/EnhancedDocumentVault';
-import { WorkerCRUD } from '@/app/components/WorkerCRUD';
 import { WorkerAndAssetManagement } from '@/app/components/WorkerAndAssetManagement';
 import { TalkAndDelivery } from '@/app/components/TalkAndDelivery';
 import { SafetyKitCRUD } from '@/app/components/SafetyKitCRUD';
@@ -53,6 +52,7 @@ import { TrainingHistory } from '@/app/components/TrainingHistory';
 import { useTheme } from '@/app/components/ThemeProvider';
 import { useOfflineStorage } from '@/app/components/OfflineManager';
 import { useCompany, Company, Branch } from '@/app/context/CompanyContext';
+import { useCompanies } from '@/app/hooks/useCompanies';
 import { useLocationDetection } from '@/app/hooks/useLocationDetection';
 import { generatePDF, downloadPDF, shareViaWhatsApp } from '@/app/components/PDFGenerator';
 import { LayoutGrid, BarChart3, Menu, X, Sun, Moon, Download, TrendingUp, Palette, Package, ClipboardList, MapPin, Navigation, FileText, LogOut } from 'lucide-react';
@@ -130,6 +130,9 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
   const [previousView, setPreviousView] = useState<View>('triadic-dashboard'); // Vista anterior para navegación
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<{ id: string; name: string } | null>(null);
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
+  const { companies, isLoading: companiesLoading, addCompany, addBranch } = useCompanies();
+  const selectedCompanyObj = companies.find(c => c.id === selectedCompany) || null;
   const [currentFormType, setCurrentFormType] = useState<FormType>('inspection');
   const [currentTalkDeliveryType, setCurrentTalkDeliveryType] = useState<TalkDeliveryType>('talk');
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -241,7 +244,10 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
       case 'company-selector':
         return (
           <CompanySelectorEnhanced
+            companies={companies}
+            isLoading={companiesLoading}
             onSelectCompany={handleSelectCompany}
+            onCreateCompany={addCompany}
             onOpenProfessionalPortfolio={() => setCurrentView('professional-portfolio')}
             onLogout={onLogout}
           />
@@ -257,8 +263,10 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
       case 'branch-selector':
         return (
           <BranchSelector
-            companyName={selectedCompany || 'Constructora Los Andes S.A.'}
+            companyName={selectedCompanyObj?.name || ''}
+            branches={selectedCompanyObj?.branches || []}
             onSelectBranch={(branchId: string, branchName: string) => handleSelectBranch({ id: branchId, name: branchName })}
+            onCreateBranch={selectedCompany ? (branch) => addBranch(selectedCompany, branch) : undefined}
             onBack={() => setCurrentView('company-selector')}
           />
         );
@@ -446,13 +454,21 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
         return (
           <RemoteSignature
             onBack={goBack}
+            companyId={selectedCompany || undefined}
+            companyName={selectedCompanyObj?.name}
+            onOpenDocument={(docId) => {
+              setSelectedDocumentId(docId);
+              navigateToView('manager-portal');
+            }}
           />
         );
-      
+
       case 'manager-portal':
         return (
           <ManagerSignaturePortal
             onBack={goBack}
+            documentId={selectedDocumentId || undefined}
+            companyName={selectedCompanyObj?.name}
           />
         );
       
@@ -461,47 +477,53 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
           <EnhancedDocumentVault
             onBack={goBack}
             isOnline={isOnline}
-            selectedCompany={selectedCompany || 'Constructora Los Andes S.A.'}
+            selectedCompany={selectedCompanyObj?.name || ''}
+            companyId={selectedCompany || undefined}
           />
         );
-      
+
       case 'mass-signature':
         return (
           <ManagerSignaturePortal
             onBack={goBack}
           />
         );
-      
+
       case 'worker-management':
         return (
           <WorkerAndAssetManagement
             onBack={goBack}
+            companyId={selectedCompany || undefined}
+            companyName={selectedCompanyObj?.name}
           />
         );
-      
+
       case 'talk-and-delivery':
         return (
           <TalkAndDelivery
             onBack={goBack}
             type={currentTalkDeliveryType}
+            companyId={selectedCompany || undefined}
+            companyName={selectedCompanyObj?.name}
+            branchId={selectedBranch?.id}
           />
         );
-      
+
       case 'safety-kits':
         return (
           <SafetyKitCRUD
             onBack={goBack}
             selectedCompanyId={selectedCompany || undefined}
-            selectedCompanyName={selectedCompany || 'Constructora Los Andes'}
+            selectedCompanyName={selectedCompanyObj?.name || ''}
           />
         );
-      
+
       case 'inspection-config':
         return (
           <InspectionConfigCRUD
             onBack={goBack}
             selectedCompanyId={selectedCompany || undefined}
-            selectedCompanyName={selectedCompany || 'Constructora Los Andes'}
+            selectedCompanyName={selectedCompanyObj?.name || ''}
           />
         );
       
@@ -683,7 +705,10 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
       default:
         return (
           <CompanySelectorEnhanced
+            companies={companies}
+            isLoading={companiesLoading}
             onSelectCompany={handleSelectCompany}
+            onCreateCompany={addCompany}
             onOpenProfessionalPortfolio={() => setCurrentView('professional-portfolio')}
             onLogout={onLogout}
           />

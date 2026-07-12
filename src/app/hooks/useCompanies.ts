@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Company } from '@/app/context/CompanyContext';
-import { fetchUserCompanies, createCompany as createCompanyInDB } from '@/app/services/companiesService';
+import { Company, Branch } from '@/app/context/CompanyContext';
+import { fetchUserCompanies, createCompany as createCompanyInDB, createBranch as createBranchInDB } from '@/app/services/companiesService';
 import { isSupabaseConfigured } from '@/app/services/supabase';
 import { MOCK_COMPANIES } from '@/app/data/mockCompanies';
 
@@ -45,5 +45,13 @@ export function useCompanies() {
     return newCompany;
   };
 
-  return { companies, isLoading, error, usingMockData, reload: load, addCompany };
+  const addBranch = async (companyId: string, branch: Omit<Branch, 'id'>): Promise<Branch> => {
+    const newBranch = await createBranchInDB(branch, companyId);
+    setCompanies(prev => prev.map(c =>
+      c.id === companyId ? { ...c, branches: [...(c.branches || []), newBranch] } : c
+    ));
+    return newBranch;
+  };
+
+  return { companies, isLoading, error, usingMockData, reload: load, addCompany, addBranch };
 }

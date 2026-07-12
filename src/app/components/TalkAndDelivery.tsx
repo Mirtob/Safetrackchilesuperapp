@@ -25,10 +25,15 @@ import { RecurrenceScheduler, RecurrenceData } from '@/app/components/Recurrence
 import { GroupedWorkerSelector } from '@/app/components/GroupedWorkerSelector';
 import { WorkerGroupManager } from '@/app/components/WorkerGroupManager';
 import { toast } from 'sonner';
+import { createSafetyTalkWithSignatures } from '@/app/services/safetyTalksService';
+import { isSupabaseConfigured } from '@/app/services/supabase';
 
 interface TalkAndDeliveryProps {
   onBack: () => void;
   type: 'talk' | 'epp' | 'induction';
+  companyId?: string;
+  companyName?: string;
+  branchId?: string;
 }
 
 interface Worker {
@@ -106,7 +111,7 @@ const EPP_CATALOG = [
   { id: 'jockey-legionario', name: 'Jockey Legionario', category: 'Protección Solar', icon: '🧢' }
 ];
 
-export function TalkAndDelivery({ onBack, type }: TalkAndDeliveryProps) {
+export function TalkAndDelivery({ onBack, type, companyId, companyName, branchId }: TalkAndDeliveryProps) {
   const [selectedTalkType, setSelectedTalkType] = useState(TALK_TYPES[0].value);
   const [showTalkTypeDropdown, setShowTalkTypeDropdown] = useState(false);
   const [selectedEPPs, setSelectedEPPs] = useState<string[]>([]);
@@ -349,9 +354,35 @@ export function TalkAndDelivery({ onBack, type }: TalkAndDeliveryProps) {
   };
 
   const handleApproveAndSend = async (workers: Worker[]) => {
-    // En producción: aquí se guardaría en Supabase y se enviaría por WhatsApp/Email
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
+    if (companyId && isSupabaseConfigured) {
+      try {
+        await createSafetyTalkWithSignatures(
+          {
+            companyId,
+            branchId,
+            title: formData.title,
+            topic: type === 'talk' ? TALK_TYPES.find(t => t.value === selectedTalkType)?.label : type,
+            talkType: type,
+            talkDate: formData.date,
+            location: formData.location,
+            eppItems: type === 'epp' ? selectedEPPs : undefined,
+          },
+          workers.filter(w => w.signature).map(w => ({
+            workerId: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(w.id) ? w.id : undefined,
+            workerName: w.name,
+            workerRut: w.rut,
+            signatureData: w.signature!,
+          }))
+        );
+      } catch (err: any) {
+        toast.error('Error al guardar en la base de datos', { description: err.message });
+        return;
+      }
+    } else {
+      // Sin Supabase configurado: solo simula el guardado (modo demo)
+      await new Promise(resolve => setTimeout(resolve, 800));
+    }
+
     toast.success('✅ Proceso completado exitosamente', {
       description: 'Documento guardado y enviado a todos los destinatarios'
     });
