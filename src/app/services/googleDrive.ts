@@ -8,6 +8,11 @@
  * no al Drive completo del usuario.
  */
 
+import {
+  refreshDriveAccessToken,
+  ReconnectRequiredError,
+} from '@/app/services/googleTokenRefresh';
+
 // ============================================================
 // TIPOS
 // ============================================================
@@ -50,15 +55,19 @@ export const MIME_TYPES = {
  * lo traen. Por eso lo persistimos aquí; si no, Drive dejaba de funcionar en
  * cuanto el usuario recargaba la página.
  *
- * El token de Google vive ~1h y no se puede refrescar desde el browser (haría
- * falta el client_secret). Cuando expira marcamos Drive como desconectado y la
- * UI ofrece reconectar, en vez de fallar en silencio.
+ * El token vive ~1h. Al caducar se renueva solo contra la Edge Function
+ * `google-token-refresh`, que guarda el client_secret del lado del servidor. Si
+ * esa función no está desplegada o Google revocó el permiso, se marca Drive como
+ * desconectado y la UI ofrece reconectar: nunca se falla en silencio.
  */
 
 const TOKEN_STORAGE_KEY = 'safetrack_drive_token';
 
 /** Margen bajo la hora real de vida del token, para no usarlo justo al filo. */
 const TOKEN_TTL_MS = 55 * 60 * 1000;
+
+/** Se renueva de forma anticipada dentro de esta ventana previa al vencimiento. */
+const REFRESH_MARGIN_MS = 5 * 60 * 1000;
 
 interface StoredToken {
   token: string;
@@ -152,6 +161,89 @@ const invalidateToken = (): void => {
   if (_accessToken) setAccessToken('');
 };
 
+// ============================================================
+// RENOVACIÓN AUTOMÁTICA
+// ============================================================
+
+/**
+ * Una sola renovación en vuelo a la vez. Sin esto, abrir una pantalla que hace
+ * cinco llamadas a Drive con el token recién vencido dispararía cinco canjes
+ * simultáneos contra Google.
+ */
+let _refreshInFlight: Promise<boolean> | null = null;
+
+/**
+ * Intenta renovar el token contra la Edge Function.
+ * Devuelve true si quedó un token utilizable.
+ */
+const tryRefresh = async (): Promise<boolean> => {
+  if (_refreshInFlight) return _refreshInFlight;
+
+  _refreshInFlight = (async () => {
+    try {
+      const result = await refreshDriveAccessToken();
+      if (!result) return false;
+
+      // Se respeta la vida real que informa Google, con el mismo margen.
+      const ttl = Math.max(result.expiresIn * 1000 - REFRESH_MARGIN_MS, 60_000);
+      setAccessToken(result.accessToken, Date.now() + ttl);
+      return true;
+    } catch (err) {
+      // Permiso revocado: el token guardado ya no vale y hay que reconectar.
+      if (err instanceof ReconnectRequiredError) invalidateToken();
+      return false;
+    } finally {
+      _refreshInFlight = null;
+    }
+  })();
+
+  return _refreshInFlight;
+};
+
+/**
+ * Asegura un token vigente antes de llamar a Drive: si caducó (o está por
+ * caducar) lo renueva. Lanza DriveAuthError solo cuando no queda alternativa.
+ */
+const requireAuth = async (): Promise<void> => {
+  if (isAuthorized() && _expiresAt - Date.now() > REFRESH_MARGIN_MS) return;
+
+  // Vencido o a punto de vencer: se intenta renovar antes de rendirse.
+  if (await tryRefresh()) return;
+
+  if (isAuthorized()) return; // sigue vigente aunque la renovación no prosperara
+
+  invalidateToken();
+  throw new DriveAuthError();
+};
+
+/**
+ * Deja el acceso a Drive listo si es posible, sin lanzar excepciones.
+ *
+ * Devuelve true cuando hay un token utilizable —ya sea el guardado o uno recién
+ * renovado— y false cuando el usuario debe reconectar. Pensado para el arranque
+ * de la app, donde un fallo no debe interrumpir nada.
+ */
+export const ensureAccess = async (): Promise<boolean> => {
+  if (isAuthorized() && _expiresAt - Date.now() > REFRESH_MARGIN_MS) return true;
+  if (await tryRefresh()) return true;
+  return isAuthorized();
+};
+
+/**
+ * Ejecuta una petición a Drive y, si Google responde 401, renueva el token una
+ * vez y reintenta. Así una sesión larga no interrumpe al usuario en terreno.
+ */
+const withRetry = async (send: () => Promise<Response>): Promise<Response> => {
+  const res = await send();
+  if (res.status !== 401) return res;
+
+  // El token pudo caducar antes de lo previsto (revocación, cambio de clave).
+  invalidateToken();
+  if (!(await tryRefresh())) return res;
+
+  return send();
+};
+
 /** Convierte un 401/403 de Drive en DriveAuthError y limpia el token. */
 const assertOk = async (res: Response, fallback: string): Promise<void> => {
   if (res.ok) return;
@@ -165,13 +257,6 @@ const assertOk = async (res: Response, fallback: string): Promise<void> => {
   throw new Error(err?.error?.message || `${fallback}: ${res.status}`);
 };
 
-/** Guarda para las llamadas: lanza DriveAuthError si no hay token utilizable. */
-const requireAuth = (): void => {
-  if (isAuthorized()) return;
-  invalidateToken();
-  throw new DriveAuthError();
-};
-
 // ============================================================
 // HELPER DE REQUEST
 // ============================================================
@@ -180,30 +265,32 @@ const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
 
 async function driveGet<T>(path: string, params: Record<string, string> = {}): Promise<T> {
-  requireAuth();
+  await requireAuth();
 
   const url = new URL(`${DRIVE_API}/${path}`);
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
 
-  const res = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${_accessToken}` },
-  });
+  const res = await withRetry(() =>
+    fetch(url.toString(), { headers: { Authorization: `Bearer ${_accessToken}` } })
+  );
 
   await assertOk(res, 'Error Drive API');
   return res.json();
 }
 
 async function drivePost<T>(path: string, body: unknown): Promise<T> {
-  requireAuth();
+  await requireAuth();
 
-  const res = await fetch(`${DRIVE_API}/${path}`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${_accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
+  const res = await withRetry(() =>
+    fetch(`${DRIVE_API}/${path}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${_accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+  );
 
   await assertOk(res, 'Error Drive API');
   return res.json();
@@ -386,18 +473,26 @@ export const uploadFile = async (
   parentFolderId: string,
   mimeType = 'application/pdf'
 ): Promise<DriveFile> => {
-  requireAuth();
+  await requireAuth();
 
   const metadata = { name: fileName, parents: [parentFolderId], mimeType };
-  const form = new FormData();
-  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-  form.append('file', blob);
 
-  const res = await fetch(`${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=${FILE_FIELDS}`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${_accessToken}` },
-    body: form,
-  });
+  // El FormData se arma en cada intento: un body ya consumido no se puede
+  // reenviar en el reintento posterior a la renovación.
+  const buildForm = (): FormData => {
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', blob);
+    return form;
+  };
+
+  const res = await withRetry(() =>
+    fetch(`${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=${FILE_FIELDS}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${_accessToken}` },
+      body: buildForm(),
+    })
+  );
 
   await assertOk(res, 'Error al subir archivo');
   return res.json();
@@ -465,6 +560,7 @@ export const GoogleDriveService = {
   setAccessToken,
   restoreAccessToken,
   isAuthorized,
+  ensureAccess,
   onAuthChange,
 
   // Carpetas

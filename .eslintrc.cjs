@@ -14,7 +14,9 @@ module.exports = {
     'plugin:@typescript-eslint/recommended',
     'plugin:react-hooks/recommended',
   ],
-  ignorePatterns: ['dist', 'node_modules', '.eslintrc.cjs', 'tests'],
+  // supabase/functions corre en Deno, con otros globals y URLs de import:
+  // lintarlo con la config del frontend solo produce ruido.
+  ignorePatterns: ['dist', 'node_modules', '.eslintrc.cjs', 'tests', 'supabase/functions'],
   parser: '@typescript-eslint/parser',
   parserOptions: {
     ecmaVersion: 'latest',

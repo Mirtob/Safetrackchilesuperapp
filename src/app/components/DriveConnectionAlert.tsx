@@ -16,12 +16,31 @@ export function DriveConnectionAlert() {
   const [isAuthorized, setIsAuthorized] = useState(() => GoogleDriveService.isAuthorized());
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  // Mientras se intenta renovar en silencio no se muestra nada: en el caso
+  // normal el usuario nunca llega a ver el aviso.
+  const [isCheckingSilently, setIsCheckingSilently] = useState(true);
 
   useEffect(() => GoogleDriveService.onAuthChange(setIsAuthorized), []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      if (!isSupabaseConfigured || !isGoogleConfigured) {
+        if (!cancelled) setIsCheckingSilently(false);
+        return;
+      }
+
+      await GoogleDriveService.ensureAccess();
+      if (!cancelled) setIsCheckingSilently(false);
+    })();
+
+    return () => { cancelled = true; };
+  }, []);
+
   // Solo aplica al modo real: en demo no hay Drive que reconectar.
   if (!isSupabaseConfigured || !isGoogleConfigured) return null;
-  if (isAuthorized || dismissed) return null;
+  if (isAuthorized || dismissed || isCheckingSilently) return null;
 
   const handleReconnect = async () => {
     setIsReconnecting(true);
