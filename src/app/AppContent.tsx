@@ -13,6 +13,7 @@ import { TriadicDashboard } from '@/app/components/TriadicDashboard';
 import { CriticalAccidentFAB } from '@/app/components/CriticalAccidentFAB';
 import { IntelligentSyncIndicator } from '@/app/components/IntelligentSyncIndicator';
 import { DriveConnectionAlert } from '@/app/components/DriveConnectionAlert';
+import { ViewErrorBoundary } from '@/app/components/ViewErrorBoundary';
 
 // ── Vistas bajo demanda: un chunk por módulo ──────────────────────────────────
 // Antes, estos ~40 imports estáticos arrastraban recharts, jspdf, xlsx,
@@ -845,9 +846,11 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
     <div className="min-h-screen bg-slate-50 dark:bg-zinc-900 transition-colors">
       <DriveConnectionAlert />
 
-      <Suspense fallback={<ViewLoadingFallback />}>
-        {renderView()}
-      </Suspense>
+      <ViewErrorBoundary resetKey={currentView}>
+        <Suspense fallback={<ViewLoadingFallback />}>
+          {renderView()}
+        </Suspense>
+      </ViewErrorBoundary>
 
       {/* Theme Toggle - Fixed top right - Visible en todas las vistas excepto company-selector */}
       {currentView !== 'company-selector' && (
