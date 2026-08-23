@@ -27,7 +27,8 @@ import {
   Mail,
   User,
   BarChart3,
-  Activity
+  Activity,
+  Settings
 } from 'lucide-react';
 import { Card } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
@@ -43,6 +44,9 @@ import { HoursTracking } from '@/app/components/professional/HoursTracking';
 import { BillingManagement } from '@/app/components/professional/BillingManagement';
 import { PortfolioExportModal } from '@/app/components/professional/PortfolioExportModal';
 import { SIIIntegration } from '@/app/components/professional/SIIIntegration';
+import { FinanceSettingsPanel } from '@/app/components/professional/FinanceSettingsPanel';
+import { useFinanceSettings } from '@/app/hooks/useFinanceSettings';
+import { formatMoney } from '@/app/services/financeSettings';
 
 interface ProfessionalPortfolioProps {
   onBack: () => void;
@@ -118,6 +122,8 @@ export function ProfessionalPortfolio({ onBack }: ProfessionalPortfolioProps) {
   const [assetData, setAssetData] = useState<any[]>([]);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
+  const { settings: financeSettings } = useFinanceSettings();
+
   const [clients, setClients] = useState<ClientCompany[]>(MOCK_CLIENTS);
   const [isLoadingClients, setIsLoadingClients] = useState(true);
   const [activatingClientId, setActivatingClientId] = useState<string | null>(null);
@@ -181,6 +187,17 @@ export function ProfessionalPortfolio({ onBack }: ProfessionalPortfolioProps) {
     return () => { cancelled = true; };
   }, [selectedClient, clients]);
 
+  /** Abre el formulario precargado con las tarifas por defecto del usuario. */
+  const openBillingForm = (clientId: string) => {
+    setBillingForm({
+      contractType: 'consultoria',
+      hourlyRate: financeSettings.defaultHourlyRate ? String(financeSettings.defaultHourlyRate) : '',
+      monthlyFee: financeSettings.defaultMonthlyFee ? String(financeSettings.defaultMonthlyFee) : '',
+      paymentDay: String(financeSettings.defaultPaymentDay),
+    });
+    setActivatingClientId(clientId);
+  };
+
   const handleActivateBilling = async (clientId: string) => {
     if (!billingForm.hourlyRate && !billingForm.monthlyFee) {
       toast.error('Ingresa una tarifa por hora o un honorario mensual');
@@ -192,7 +209,7 @@ export function ProfessionalPortfolio({ onBack }: ProfessionalPortfolioProps) {
         contractType: billingForm.contractType,
         hourlyRate: parseInt(billingForm.hourlyRate || '0'),
         monthlyFee: billingForm.monthlyFee ? parseInt(billingForm.monthlyFee) : undefined,
-        paymentDay: parseInt(billingForm.paymentDay || '30'),
+        paymentDay: parseInt(billingForm.paymentDay || String(financeSettings.defaultPaymentDay)),
         status: 'active',
         brandColor: clients.find(c => c.id === clientId)?.brandColor || '#0055A4',
       });
@@ -246,13 +263,8 @@ export function ProfessionalPortfolio({ onBack }: ProfessionalPortfolioProps) {
     return badges[status];
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-CL', {
-      style: 'currency',
-      currency: 'CLP',
-      minimumFractionDigits: 0
-    }).format(amount);
-  };
+  // Usa la moneda y el formato regional que el usuario definió en Configuración.
+  const formatCurrency = (amount: number) => formatMoney(amount, financeSettings);
 
   const handleOnboardingComplete = (companyData: any) => {
     setOnboardingData(companyData);
@@ -571,7 +583,7 @@ export function ProfessionalPortfolio({ onBack }: ProfessionalPortfolioProps) {
 
           {/* Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="w-full grid grid-cols-5 bg-zinc-100 dark:bg-zinc-900">
+            <TabsList className="w-full grid grid-cols-6 bg-zinc-100 dark:bg-zinc-900">
               <TabsTrigger value="clients" className="text-xs md:text-sm">
                 <Building2 className="w-4 h-4 mr-1 md:mr-2" />
                 <span className="hidden md:inline">Clientes</span>
@@ -591,6 +603,10 @@ export function ProfessionalPortfolio({ onBack }: ProfessionalPortfolioProps) {
               <TabsTrigger value="expenses" className="text-xs md:text-sm">
                 <Receipt className="w-4 h-4 mr-1 md:mr-2" />
                 <span className="hidden md:inline">Gastos</span>
+              </TabsTrigger>
+              <TabsTrigger value="settings" className="text-xs md:text-sm">
+                <Settings className="w-4 h-4 mr-1 md:mr-2" />
+                <span className="hidden md:inline">Configuración</span>
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -720,7 +736,7 @@ export function ProfessionalPortfolio({ onBack }: ProfessionalPortfolioProps) {
                           </p>
 
                           {!isActivating ? (
-                            <Button size="sm" variant="outline" onClick={() => setActivatingClientId(client.id)}>
+                            <Button size="sm" variant="outline" onClick={() => openBillingForm(client.id)}>
                               <Plus className="w-3 h-3 mr-1" />
                               Activar facturación
                             </Button>
@@ -906,6 +922,11 @@ export function ProfessionalPortfolio({ onBack }: ProfessionalPortfolioProps) {
           {/* TAB: Gastos */}
           <TabsContent value="expenses">
             <ExpenseTracking clients={clients} />
+          </TabsContent>
+
+          {/* TAB: Configuración */}
+          <TabsContent value="settings">
+            <FinanceSettingsPanel />
           </TabsContent>
         </Tabs>
       </div>

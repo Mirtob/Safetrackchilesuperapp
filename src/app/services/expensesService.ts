@@ -1,6 +1,11 @@
 import { supabase } from './supabase';
 
-export type ExpenseCategory = 'transport' | 'fuel' | 'food' | 'accommodation' | 'materials' | 'other';
+/**
+ * Id de categoría de gasto. Es un string libre porque el usuario puede definir
+ * sus propias categorías en Configuración de finanzas; las de fábrica
+ * (transport, fuel, food, accommodation, materials, other) siguen existiendo.
+ */
+export type ExpenseCategory = string;
 
 export interface Expense {
   id: string;

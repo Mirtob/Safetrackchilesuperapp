@@ -11,7 +11,9 @@ interface VoiceInputProps {
   continuous?: boolean;
   placeholder?: string;
   buttonVariant?: 'default' | 'floating';
-  variant?: 'card' | 'compact';
+  // 'default' es el render completo; 'compact' y 'card' son las variantes
+  // reducidas. Faltaba en el union aunque el componente ya la manejaba.
+  variant?: 'default' | 'card' | 'compact';
 }
 
 // Extender la interfaz Window para incluir webkitSpeechRecognition

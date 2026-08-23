@@ -6,6 +6,7 @@ import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Textarea } from '@/app/components/ui/textarea';
 import { toast } from 'sonner';
+import { useFinanceSettings } from '@/app/hooks/useFinanceSettings';
 
 interface ClientCompany {
   id: string;
@@ -35,6 +36,7 @@ interface AddHoursModalProps {
 }
 
 export function AddHoursModal({ isOpen, onClose, clients, onSave, editingEntry = null }: AddHoursModalProps) {
+  const { settings } = useFinanceSettings();
   const [selectedClient, setSelectedClient] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [startTime, setStartTime] = useState('');
@@ -94,7 +96,8 @@ export function AddHoursModal({ isOpen, onClose, clients, onSave, editingEntry =
   
   const getEffectiveRate = () => {
     if (useCustomRate && customRate) return parseFloat(customRate);
-    return selectedClientData?.hourlyRate || 0;
+    // Cae a la tarifa por defecto del usuario si el cliente no tiene una propia.
+    return selectedClientData?.hourlyRate || settings.defaultHourlyRate;
   };
 
   const calculateAmount = () => {

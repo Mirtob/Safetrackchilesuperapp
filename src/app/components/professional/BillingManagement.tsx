@@ -14,6 +14,8 @@ import {
   Invoice,
 } from '@/app/services/billingService';
 import { isSupabaseConfigured } from '@/app/services/supabase';
+import { useFinanceSettings } from '@/app/hooks/useFinanceSettings';
+import { formatMoney } from '@/app/services/financeSettings';
 
 interface ClientCompany {
   id: string;
@@ -67,6 +69,7 @@ const MOCK_INVOICES: Invoice[] = [
 ];
 
 export function BillingManagement({ clients }: BillingManagementProps) {
+  const { settings } = useFinanceSettings();
   const [invoices, setInvoices] = useState<Invoice[]>(MOCK_INVOICES);
   const [isLoadingInvoices, setIsLoadingInvoices] = useState(true);
   const [showNewInvoiceForm, setShowNewInvoiceForm] = useState(false);
@@ -103,13 +106,7 @@ export function BillingManagement({ clients }: BillingManagementProps) {
     return () => { cancelled = true; };
   }, [clients, canPersist]);
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-CL', {
-      style: 'currency',
-      currency: 'CLP',
-      minimumFractionDigits: 0
-    }).format(amount);
-  };
+  const formatCurrency = (amount: number) => formatMoney(amount, settings);
 
   const getStatusBadge = (status: Invoice['status']) => {
     const badges = {
@@ -132,6 +129,13 @@ export function BillingManagement({ clients }: BillingManagementProps) {
     setShowNewInvoiceForm(true);
   };
 
+  /** Vencimiento propuesto según el plazo configurado por el usuario. */
+  const defaultDueDate = (): string => {
+    const due = new Date();
+    due.setDate(due.getDate() + settings.defaultDueDays);
+    return due.toISOString().split('T')[0];
+  };
+
   const handleSaveNewInvoice = async () => {
     if (!newInvoice.companyId || !newInvoice.amount || !newInvoice.description) {
       toast.error('Completa cliente, monto y descripción');
@@ -148,9 +152,10 @@ export function BillingManagement({ clients }: BillingManagementProps) {
             companyId: newInvoice.companyId,
             amount: parseInt(newInvoice.amount),
             description: newInvoice.description,
-            dueDate: newInvoice.dueDate || undefined,
+            dueDate: newInvoice.dueDate || defaultDueDate(),
           },
-          client.name
+          client.name,
+          settings.invoicePrefix
         );
         setInvoices([created, ...invoices]);
       } else {
@@ -158,7 +163,7 @@ export function BillingManagement({ clients }: BillingManagementProps) {
           id: `INV-${Date.now()}`,
           companyId: newInvoice.companyId,
           clientName: client.name,
-          invoiceNumber: `HN-${new Date().getFullYear()}-${String(invoices.length + 1).padStart(3, '0')}`,
+          invoiceNumber: `${settings.invoicePrefix}-${new Date().getFullYear()}-${String(invoices.length + 1).padStart(3, '0')}`,
           issueDate: new Date().toISOString().split('T')[0],
           dueDate: newInvoice.dueDate || '',
           amount: parseInt(newInvoice.amount),

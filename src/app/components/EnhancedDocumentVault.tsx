@@ -186,7 +186,8 @@ const MOCK_DOCUMENTS: DocumentItem[] = [
   }
 ];
 
-type ViewMode = 'companies' | 'years' | 'categories' | 'documents';
+// La empresa llega por prop, así que el recorrido empieza en los años.
+type ViewMode = 'years' | 'categories' | 'documents';
 
 const mapTalkToDocumentItem = (talk: Awaited<ReturnType<typeof fetchCompanyDocuments>>[number], companyName: string): DocumentItem => ({
   id: talk.id,
@@ -498,37 +499,6 @@ export function EnhancedDocumentVault({ onBack, isOnline, selectedCompany, compa
           <div className="flex items-center justify-center py-12 text-slate-400">
             <Loader2 className="w-5 h-5 mr-2 animate-spin" />
             Cargando documentos...
-          </div>
-        )}
-
-        {/* Vista de Empresas */}
-        {!isLoadingDocuments && viewMode === 'companies' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {companies.map((company) => {
-              const companyDocs = documents.filter(d => d.company === company);
-              const Icon = Building2;
-              return (
-                <Card
-                  key={company}
-                  onClick={() => handleNavigateToCompany(company)}
-                  className="bg-white dark:bg-zinc-800 border-slate-200 dark:border-zinc-700 hover:border-blue-600 dark:hover:border-blue-600 cursor-pointer hover:shadow-lg transition-all interactive"
-                >
-                  <div className="p-5">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center">
-                        <Icon className="w-6 h-6 text-blue-600" />
-                      </div>
-                      <ChevronRight className="w-5 h-5 text-slate-400" />
-                    </div>
-                    <h3 className="text-slate-900 dark:text-white font-semibold mb-2">{company}</h3>
-                    <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-zinc-400">
-                      <FileText className="w-4 h-4" />
-                      <span>{companyDocs.length} documentos</span>
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
           </div>
         )}
 

@@ -243,7 +243,7 @@ export function InspectionModeEnhanced({ onBack, companyId }: InspectionModeEnha
 
   const getPeriodDates = (period: Period): { from: Date; to: Date } => {
     const now = new Date();
-    let from = new Date();
+    const from = new Date();
 
     switch (period) {
       case 'month':

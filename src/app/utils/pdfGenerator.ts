@@ -579,11 +579,13 @@ export function generateMonthlyWorkPlanPDF(data: {
   doc.setFont('helvetica', 'normal');
   doc.text('Estado:', 20, yPosition + 14);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(
-    data.status === 'Aprobado' ? [34, 197, 94] : // Green
-    data.status === 'Pendiente de Firmas' ? [234, 179, 8] : // Yellow
-    [100, 100, 100] // Gray
-  );
+  // jsPDF espera los tres canales como argumentos sueltos; pasarle un array
+  // no pinta nada.
+  const [statusR, statusG, statusB] =
+    data.status === 'Aprobado' ? [34, 197, 94] :            // Verde
+    data.status === 'Pendiente de Firmas' ? [234, 179, 8] : // Amarillo
+    [100, 100, 100];                                        // Gris
+  doc.setTextColor(statusR, statusG, statusB);
   doc.text(data.status, 42, yPosition + 14);
 
   // Código de verificación si existe

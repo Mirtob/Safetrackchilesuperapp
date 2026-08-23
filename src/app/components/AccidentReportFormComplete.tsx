@@ -48,7 +48,11 @@ interface AccidentFormData {
   sector: string;
   sectorName: string;
   specificLocation: string;
-  
+
+  // N° de DIAT: lo asigna la mutualidad, no la app. Queda opcional para poder
+  // registrarlo cuando llegue; el PDF imprime "Pendiente" mientras tanto.
+  diatNumber?: string;
+
   // Trabajador accidentado
   injuredWorker: Worker | null;
   
@@ -501,7 +505,7 @@ export function AccidentReportFormComplete({ onBack, onSubmit }: AccidentReportF
     doc.setFont('helvetica', 'bold');
     doc.text('Fecha del Accidente:', 17, yPos);
     doc.setFont('helvetica', 'normal');
-    doc.text(`${formData.date} ${formData.time}`, 55, yPos);
+    doc.text(`${formData.accidentDate} ${formData.accidentTime}`, 55, yPos);
 
     // SECCIÓN 2: TRABAJADOR ACCIDENTADO
     yPos += 12;
@@ -512,7 +516,9 @@ export function AccidentReportFormComplete({ onBack, onSubmit }: AccidentReportF
     doc.setFont('helvetica', 'bold');
     doc.text('2. TRABAJADOR ACCIDENTADO', 17, yPos);
 
-    const worker = MOCK_WORKERS.find(w => w.id === formData.injuredWorker);
+    // injuredWorker ya es el Worker completo, no un id: buscarlo en WORKERS
+    // devolvía siempre undefined y el PDF salía sin datos del accidentado.
+    const worker = formData.injuredWorker;
     if (worker) {
       yPos += 10;
       doc.setFontSize(9);
@@ -581,7 +587,7 @@ export function AccidentReportFormComplete({ onBack, onSubmit }: AccidentReportF
       formData.witnessStatements.forEach((statement, index) => {
         if (statement.witness && statement.statement) {
           yPos += 10;
-          const witness = MOCK_WORKERS.find(w => w.id === statement.witness);
+          const witness = statement.witness;
           if (witness) {
             doc.setFontSize(9);
             doc.setTextColor(60, 60, 60);
@@ -1711,7 +1717,6 @@ export function AccidentReportFormComplete({ onBack, onSubmit }: AccidentReportF
             position: formData.injuredWorker.position,
             department: formData.injuredWorker.department,
             email: formData.injuredWorker.email,
-            signed: true,
             signedAt: new Date().toLocaleString('es-CL'),
             signature: formData.injuredWorkerSignature || undefined
           }] : []}

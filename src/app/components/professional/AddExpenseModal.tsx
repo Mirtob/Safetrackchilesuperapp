@@ -7,6 +7,7 @@ import { Label } from '@/app/components/ui/label';
 import { Textarea } from '@/app/components/ui/textarea';
 import { Badge } from '@/app/components/ui/badge';
 import { toast } from 'sonner';
+import { useFinanceSettings } from '@/app/hooks/useFinanceSettings';
 
 interface ClientCompany {
   id: string;
@@ -21,12 +22,22 @@ interface AddExpenseModalProps {
   onSave: (data: any) => void;
 }
 
-type ExpenseCategory = 'transport' | 'fuel' | 'food' | 'accommodation' | 'materials' | 'other';
+/** Emoji de las categorías de fábrica; las del usuario caen al genérico. */
+const CATEGORY_EMOJI: Record<string, string> = {
+  transport: '🚗',
+  fuel: '⛽',
+  food: '🍴',
+  accommodation: '🏨',
+  materials: '🛠️',
+  other: '📄',
+};
 
 export function AddExpenseModal({ isOpen, onClose, clients, onSave }: AddExpenseModalProps) {
+  const { settings } = useFinanceSettings();
+
   const [selectedClient, setSelectedClient] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [category, setCategory] = useState<ExpenseCategory>('transport');
+  const [category, setCategory] = useState<string>('transport');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [location, setLocation] = useState('');
@@ -38,14 +49,12 @@ export function AddExpenseModal({ isOpen, onClose, clients, onSave }: AddExpense
 
   const selectedClientData = clients.find(c => c.id === selectedClient);
 
-  const categories = [
-    { value: 'transport', label: 'Transporte', icon: '🚗' },
-    { value: 'fuel', label: 'Combustible', icon: '⛽' },
-    { value: 'food', label: 'Alimentación', icon: '🍴' },
-    { value: 'accommodation', label: 'Alojamiento', icon: '🏨' },
-    { value: 'materials', label: 'Materiales/EPP', icon: '🛠️' },
-    { value: 'other', label: 'Otros', icon: '📄' }
-  ];
+  // Las categorías salen de la configuración del usuario, no de una lista fija.
+  const categories = settings.expenseCategories.map(c => ({
+    value: c.id,
+    label: c.label,
+    icon: CATEGORY_EMOJI[c.id] || '📄',
+  }));
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -203,7 +212,7 @@ export function AddExpenseModal({ isOpen, onClose, clients, onSave }: AddExpense
               </Label>
               <select
                 value={category}
-                onChange={(e) => setCategory(e.target.value as ExpenseCategory)}
+                onChange={(e) => setCategory(e.target.value)}
                 className="w-full px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:ring-2 focus:ring-purple-600 focus:border-transparent"
               >
                 {categories.map(cat => (

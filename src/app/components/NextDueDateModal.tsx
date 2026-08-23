@@ -36,7 +36,7 @@ export function NextDueDateModal({
   // Calcular próxima fecha automáticamente según frecuencia
   const calculateNextDate = (freq: string) => {
     const last = new Date(lastDate);
-    let next = new Date(last);
+    const next = new Date(last);
 
     switch (freq) {
       case 'mensual':

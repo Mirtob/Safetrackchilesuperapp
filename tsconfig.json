@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    /* import.meta.env y los tipos de assets de Vite */
+    "types": ["vite/client"],
+
+    /* Resolución al estilo bundler: Vite se encarga de emitir. */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* Alias @ → src, igual que en vite.config.ts */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+
+    /* Chequeos. strict queda apagado por ahora: el código se escribió sin
+       type-checking y activarlo de golpe entierra los errores reales bajo
+       miles de nulls implícitos. Los checks de abajo atrapan los bugs que
+       importan (variables inexistentes, imports rotos, returns faltantes)
+       sin volver el reporte inutilizable. */
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true
+  },
+  "include": ["src", "vite.config.ts"],
+  "exclude": ["node_modules", "dist", "tests"]
+}

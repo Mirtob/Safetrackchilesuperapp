@@ -54,12 +54,14 @@ export const fetchInvoices = async (
 
 export const createInvoice = async (
   input: InvoiceInput,
-  clientName: string
+  clientName: string,
+  /** Prefijo configurable del número de boleta. */
+  invoicePrefix = 'HN'
 ): Promise<Invoice> => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('No autenticado');
 
-  const invoiceNumber = `HN-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
+  const invoiceNumber = `${invoicePrefix}-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
 
   const { data, error } = await supabase
     .from('invoices')

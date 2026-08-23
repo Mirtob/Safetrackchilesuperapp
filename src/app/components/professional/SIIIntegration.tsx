@@ -14,6 +14,8 @@ import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Textarea } from '@/app/components/ui/textarea';
+import { useFinanceSettings } from '@/app/hooks/useFinanceSettings';
+import { formatMoney, calculateHonorarium } from '@/app/services/financeSettings';
 
 interface ClientCompany {
   id: string;
@@ -30,9 +32,11 @@ interface SIIIntegrationProps {
 // autorizado, también manual. Emitir BHE por API requiere contratar un proveedor externo
 // (p. ej. SimpleAPI, Bolo, API Gateway) — no hay nada que "conectar" del lado de SafeTrack
 // sin esa decisión y esas credenciales.
-const RETENTION_RATE = 0.1525; // Tasa de retención de boletas de honorarios vigente 2026
-
 export function SIIIntegration({ clients }: SIIIntegrationProps) {
+  // La tasa de retención sube cada año por ley: la define el usuario en
+  // Configuración de finanzas en vez de estar fija en el código.
+  const { settings } = useFinanceSettings();
+
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewForm, setPreviewForm] = useState({
     clientId: '',
@@ -40,13 +44,15 @@ export function SIIIntegration({ clients }: SIIIntegrationProps) {
     description: '',
   });
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-CL', {
-      style: 'currency',
-      currency: 'CLP',
-      minimumFractionDigits: 0
-    }).format(amount);
-  };
+  const formatCurrency = (amount: number) => formatMoney(amount, settings);
+
+  const breakdown = calculateHonorarium(parseInt(previewForm.amount || '0', 10), settings);
+
+  /** "15,25" para mostrar la tasa vigente en la UI. */
+  const retentionLabel = settings.retentionRate.toLocaleString('es-CL', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
 
   return (
     <div className="space-y-6">
@@ -168,19 +174,29 @@ export function SIIIntegration({ clients }: SIIIntegrationProps) {
                         <div>
                           <p className="text-blue-600 dark:text-blue-400">Monto Bruto</p>
                           <p className="font-semibold text-blue-900 dark:text-blue-200">
-                            {formatCurrency(parseInt(previewForm.amount || '0'))}
+                            {formatCurrency(breakdown.gross)}
                           </p>
                         </div>
                         <div>
-                          <p className="text-blue-600 dark:text-blue-400">Retención (15,25%)</p>
+                          <p className="text-blue-600 dark:text-blue-400">
+                            Retención ({retentionLabel}%)
+                          </p>
                           <p className="font-semibold text-blue-900 dark:text-blue-200">
-                            {formatCurrency(Math.round(parseInt(previewForm.amount || '0') * RETENTION_RATE))}
+                            {formatCurrency(breakdown.retention)}
                           </p>
                         </div>
+                        {settings.vatEnabled && (
+                          <div>
+                            <p className="text-blue-600 dark:text-blue-400">IVA ({settings.vatRate}%)</p>
+                            <p className="font-semibold text-blue-900 dark:text-blue-200">
+                              {formatCurrency(breakdown.vat)}
+                            </p>
+                          </div>
+                        )}
                         <div className="col-span-2 pt-2 border-t border-blue-200 dark:border-blue-800">
                           <p className="text-blue-600 dark:text-blue-400">Líquido a Recibir</p>
                           <p className="font-bold text-lg text-blue-900 dark:text-blue-200">
-                            {formatCurrency(Math.round(parseInt(previewForm.amount || '0') * (1 - RETENTION_RATE)))}
+                            {formatCurrency(breakdown.net)}
                           </p>
                         </div>
                       </div>

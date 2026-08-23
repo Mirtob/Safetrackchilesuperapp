@@ -31,7 +31,7 @@ export function ScheduleNextInspectionModal({
   // Calcular próxima fecha según frecuencia
   const calculateNextDate = (freq: string) => {
     const last = new Date(lastInspectionDate);
-    let next = new Date(last);
+    const next = new Date(last);
 
     switch (freq) {
       case 'semanal':

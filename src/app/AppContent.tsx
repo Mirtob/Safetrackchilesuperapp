@@ -1,54 +1,65 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
+
+// ── Shell y primeras vistas: estáticos ────────────────────────────────────────
+// Se necesitan en el primer render, así que dividirlos solo añadiría un salto
+// de red antes de mostrar nada.
 import { CompanySelectorEnhanced } from '@/app/components/CompanySelectorEnhanced';
 import { CompanySelector } from '@/app/components/CompanySelector';
 import { CompanySelectorWithMap } from '@/app/components/CompanySelectorWithMap';
 import { LocationArrivalNotification } from '@/app/components/LocationArrivalNotification';
 import { BranchSelector } from '@/app/components/BranchSelector';
 import { ProfileSelector } from '@/app/components/ProfileSelector';
-import { ProfessionalPortfolio } from '@/app/components/professional/ProfessionalPortfolio';
-import { StrategicPanel } from '@/app/components/StrategicPanel';
 import { TriadicDashboard } from '@/app/components/TriadicDashboard';
-import { ActionPlanTracker } from '@/app/components/ActionPlanTracker';
-import { EvidenceCompare } from '@/app/components/EvidenceCompare';
-import { SmartForm } from '@/app/components/SmartForm';
-import { InspectionFormEnhanced } from '@/app/components/InspectionFormEnhanced';
-import { IncidentReportFormEnhanced } from '@/app/components/IncidentReportFormEnhanced';
-import { IncidentFollowUp } from '@/app/components/IncidentFollowUp';
-import { ComplianceDashboard } from '@/app/components/ComplianceDashboard';
-import { TimelineView } from '@/app/components/TimelineView';
-import { InspectionModeEnhanced } from '@/app/components/InspectionModeEnhanced';
-import { StatisticsModule } from '@/app/components/StatisticsModule';
-import { CausalAnalysis } from '@/app/components/CausalAnalysis';
-import { CalendarView } from '@/app/components/CalendarView';
-import { RouteOptimizationScreen } from '@/app/components/RouteOptimizationScreen';
-import { DocumentVault } from '@/app/components/DocumentVault';
-import { RemoteSignature } from '@/app/components/RemoteSignature';
-import { ManagerSignaturePortal } from '@/app/components/ManagerSignaturePortal';
-import { EnhancedDocumentVault } from '@/app/components/EnhancedDocumentVault';
-import { WorkerAndAssetManagement } from '@/app/components/WorkerAndAssetManagement';
-import { TalkAndDelivery } from '@/app/components/TalkAndDelivery';
-import { SafetyKitCRUD } from '@/app/components/SafetyKitCRUD';
-import { InspectionConfigCRUD } from '@/app/components/InspectionConfigCRUD';
-import { AssetInventory } from '@/app/components/AssetInventory';
-import { MaintenancePlanner } from '@/app/components/MaintenancePlanner';
-import { QRInspection } from '@/app/components/QRInspection';
-import { UnifiedAlertCenter } from '@/app/components/UnifiedAlertCenter';
-import { ExecutiveDashboard } from '@/app/components/ExecutiveDashboard';
-import { FinancialImpact } from '@/app/components/FinancialImpact';
-import { BranchRiskMap } from '@/app/components/BranchRiskMap';
-import { APIIntegration } from '@/app/components/APIIntegration';
-import { SecurityCenter } from '@/app/components/SecurityCenter';
-import { DocumentDeliverySystem } from '@/app/components/DocumentDeliverySystem';
-import { MonthlyWorkPlanComplete } from '@/app/components/MonthlyWorkPlanComplete';
-import { AccidentMode } from '@/app/components/AccidentMode';
-import { ContractorPortal } from '@/app/components/ContractorPortal';
-import { QRCodeManager } from '@/app/components/QRCodeManager';
-import { QREmergencyAccess } from '@/app/components/QREmergencyAccess';
-import { ColorSystemDemo } from '@/app/components/ColorSystemDemo';
 import { CriticalAccidentFAB } from '@/app/components/CriticalAccidentFAB';
 import { IntelligentSyncIndicator } from '@/app/components/IntelligentSyncIndicator';
-import { DocumentWorkflowDemo } from '@/app/components/DocumentWorkflowDemo';
-import { TrainingHistory } from '@/app/components/TrainingHistory';
+import { DriveConnectionAlert } from '@/app/components/DriveConnectionAlert';
+
+// ── Vistas bajo demanda: un chunk por módulo ──────────────────────────────────
+// Antes, estos ~40 imports estáticos arrastraban recharts, jspdf, xlsx,
+// html2canvas y Google Maps al bundle inicial: 3,25 MB que el usuario descargaba
+// entero aunque solo abriera el dashboard. Ahora cada vista carga su código al
+// visitarla por primera vez.
+const ProfessionalPortfolio = lazy(() => import('@/app/components/professional/ProfessionalPortfolio').then(m => ({ default: m.ProfessionalPortfolio })));
+const StrategicPanel = lazy(() => import('@/app/components/StrategicPanel').then(m => ({ default: m.StrategicPanel })));
+const ActionPlanTracker = lazy(() => import('@/app/components/ActionPlanTracker').then(m => ({ default: m.ActionPlanTracker })));
+const EvidenceCompare = lazy(() => import('@/app/components/EvidenceCompare').then(m => ({ default: m.EvidenceCompare })));
+const SmartForm = lazy(() => import('@/app/components/SmartForm').then(m => ({ default: m.SmartForm })));
+const InspectionFormEnhanced = lazy(() => import('@/app/components/InspectionFormEnhanced').then(m => ({ default: m.InspectionFormEnhanced })));
+const IncidentReportFormEnhanced = lazy(() => import('@/app/components/IncidentReportFormEnhanced').then(m => ({ default: m.IncidentReportFormEnhanced })));
+const IncidentFollowUp = lazy(() => import('@/app/components/IncidentFollowUp').then(m => ({ default: m.IncidentFollowUp })));
+const ComplianceDashboard = lazy(() => import('@/app/components/ComplianceDashboard').then(m => ({ default: m.ComplianceDashboard })));
+const TimelineView = lazy(() => import('@/app/components/TimelineView').then(m => ({ default: m.TimelineView })));
+const InspectionModeEnhanced = lazy(() => import('@/app/components/InspectionModeEnhanced').then(m => ({ default: m.InspectionModeEnhanced })));
+const StatisticsModule = lazy(() => import('@/app/components/StatisticsModule').then(m => ({ default: m.StatisticsModule })));
+const CausalAnalysis = lazy(() => import('@/app/components/CausalAnalysis').then(m => ({ default: m.CausalAnalysis })));
+const CalendarView = lazy(() => import('@/app/components/CalendarView').then(m => ({ default: m.CalendarView })));
+const RouteOptimizationScreen = lazy(() => import('@/app/components/RouteOptimizationScreen').then(m => ({ default: m.RouteOptimizationScreen })));
+const DocumentVault = lazy(() => import('@/app/components/DocumentVault').then(m => ({ default: m.DocumentVault })));
+const RemoteSignature = lazy(() => import('@/app/components/RemoteSignature').then(m => ({ default: m.RemoteSignature })));
+const ManagerSignaturePortal = lazy(() => import('@/app/components/ManagerSignaturePortal').then(m => ({ default: m.ManagerSignaturePortal })));
+const EnhancedDocumentVault = lazy(() => import('@/app/components/EnhancedDocumentVault').then(m => ({ default: m.EnhancedDocumentVault })));
+const WorkerAndAssetManagement = lazy(() => import('@/app/components/WorkerAndAssetManagement').then(m => ({ default: m.WorkerAndAssetManagement })));
+const TalkAndDelivery = lazy(() => import('@/app/components/TalkAndDelivery').then(m => ({ default: m.TalkAndDelivery })));
+const SafetyKitCRUD = lazy(() => import('@/app/components/SafetyKitCRUD').then(m => ({ default: m.SafetyKitCRUD })));
+const InspectionConfigCRUD = lazy(() => import('@/app/components/InspectionConfigCRUD').then(m => ({ default: m.InspectionConfigCRUD })));
+const AssetInventory = lazy(() => import('@/app/components/AssetInventory').then(m => ({ default: m.AssetInventory })));
+const MaintenancePlanner = lazy(() => import('@/app/components/MaintenancePlanner').then(m => ({ default: m.MaintenancePlanner })));
+const QRInspection = lazy(() => import('@/app/components/QRInspection').then(m => ({ default: m.QRInspection })));
+const UnifiedAlertCenter = lazy(() => import('@/app/components/UnifiedAlertCenter').then(m => ({ default: m.UnifiedAlertCenter })));
+const ExecutiveDashboard = lazy(() => import('@/app/components/ExecutiveDashboard').then(m => ({ default: m.ExecutiveDashboard })));
+const FinancialImpact = lazy(() => import('@/app/components/FinancialImpact').then(m => ({ default: m.FinancialImpact })));
+const BranchRiskMap = lazy(() => import('@/app/components/BranchRiskMap').then(m => ({ default: m.BranchRiskMap })));
+const APIIntegration = lazy(() => import('@/app/components/APIIntegration').then(m => ({ default: m.APIIntegration })));
+const SecurityCenter = lazy(() => import('@/app/components/SecurityCenter').then(m => ({ default: m.SecurityCenter })));
+const DocumentDeliverySystem = lazy(() => import('@/app/components/DocumentDeliverySystem').then(m => ({ default: m.DocumentDeliverySystem })));
+const MonthlyWorkPlanComplete = lazy(() => import('@/app/components/MonthlyWorkPlanComplete').then(m => ({ default: m.MonthlyWorkPlanComplete })));
+const AccidentMode = lazy(() => import('@/app/components/AccidentMode').then(m => ({ default: m.AccidentMode })));
+const ContractorPortal = lazy(() => import('@/app/components/ContractorPortal').then(m => ({ default: m.ContractorPortal })));
+const QRCodeManager = lazy(() => import('@/app/components/QRCodeManager').then(m => ({ default: m.QRCodeManager })));
+const QREmergencyAccess = lazy(() => import('@/app/components/QREmergencyAccess').then(m => ({ default: m.QREmergencyAccess })));
+const ColorSystemDemo = lazy(() => import('@/app/components/ColorSystemDemo').then(m => ({ default: m.ColorSystemDemo })));
+const DocumentWorkflowDemo = lazy(() => import('@/app/components/DocumentWorkflowDemo').then(m => ({ default: m.DocumentWorkflowDemo })));
+const TrainingHistory = lazy(() => import('@/app/components/TrainingHistory').then(m => ({ default: m.TrainingHistory })));
 import { createInspection } from '@/app/services/inspectionsService';
 import { createIncident } from '@/app/services/incidentsService';
 import { isSupabaseConfigured } from '@/app/services/supabase';
@@ -57,12 +68,27 @@ import { useOfflineStorage } from '@/app/components/OfflineManager';
 import { useCompany, Company, Branch } from '@/app/context/CompanyContext';
 import { useCompanies } from '@/app/hooks/useCompanies';
 import { useLocationDetection } from '@/app/hooks/useLocationDetection';
-import { generatePDF, downloadPDF, shareViaWhatsApp } from '@/app/components/PDFGenerator';
 import { LayoutGrid, BarChart3, Menu, X, Sun, Moon, Download, TrendingUp, Palette, Package, ClipboardList, MapPin, Navigation, FileText, LogOut } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { toast } from 'sonner';
 import type { UserData } from '@/app/App';
+
+/**
+ * Placeholder mientras se descarga el chunk de una vista. Deliberadamente
+ * discreto: en una conexión decente el chunk llega en milisegundos y un spinner
+ * a pantalla completa se vería como un parpadeo molesto en cada navegación.
+ */
+function ViewLoadingFallback() {
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center" role="status" aria-live="polite">
+      <div className="flex flex-col items-center gap-3">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-[#FF8C00] dark:border-zinc-700 dark:border-t-[#FF8C00]" />
+        <p className="text-sm text-slate-500 dark:text-zinc-400">Cargando módulo...</p>
+      </div>
+    </div>
+  );
+}
 
 // Mock data estático para evitar re-cálculos en cada render
 const INITIAL_MOCK_PENDING_ITEMS = [
@@ -92,33 +118,69 @@ const INITIAL_MOCK_PENDING_ITEMS = [
   }
 ];
 
-type View = 
-  | 'company-selector' 
+/**
+ * Vistas navegables. Debe cubrir todos los `case` de renderView(): el tipo se
+ * había quedado con 26 entradas mientras el switch crecía a 47, así que media
+ * app era inalcanzable según los tipos aunque funcionara en runtime.
+ */
+type View =
+  // Selección y navegación base
+  | 'company-selector'
   | 'branch-selector'
   | 'profile-selector'
+  | 'professional-portfolio'
   | 'client-portfolio'
-  | 'action-plan-tracker'
-  | 'evidence-compare'
+  // Paneles
   | 'triadic-dashboard'
+  | 'dashboard'
+  | 'executive-dashboard'
+  | 'strategic-panel'
+  | 'statistics'
+  | 'financial-impact'
+  | 'branch-risk'
+  // Formularios y registro
   | 'form'
   | 'inspection-form'
-  | 'dashboard' 
-  | 'timeline'
   | 'inspection-mode'
-  | 'statistics'
+  | 'incident-report-form'
+  | 'incident-followup'
+  | 'talk-delivery-form'
+  | 'talk-and-delivery'
+  | 'epp-delivery'
+  | 'accident-mode'
   | 'causal-analysis'
-  | 'calendar'
-  | 'route-optimizer'
+  | 'action-plan-tracker'
+  | 'evidence-compare'
+  // Documentos y firmas
   | 'document-vault'
+  | 'enhanced-vault'
+  | 'document-delivery'
+  | 'document-workflow-demo'
   | 'remote-signature'
   | 'manager-portal'
-  | 'enhanced-vault'
   | 'mass-signature'
+  // Personas, activos y planificación
   | 'worker-management'
-  | 'incident-report-form'
-  | 'talk-delivery-form'
+  | 'training-history'
+  | 'safety-kits'
+  | 'asset-inventory'
+  | 'maintenance-planner'
+  | 'inspection-config'
+  | 'monthly-plan'
+  | 'calendar'
+  | 'timeline'
+  | 'route-optimizer'
+  // QR y terreno
+  | 'qr-inspection'
+  | 'qr-manager'
+  | 'qr-emergency-access'
   | 'field-action-center'
-  | 'training-history';
+  // Sistema
+  | 'alert-center'
+  | 'security-center'
+  | 'api-integration'
+  | 'contractor-portal'
+  | 'color-system-demo';
 
 type FormType = 'inspection' | 'epp' | 'incident' | 'talk';
 type TalkDeliveryType = 'talk' | 'epp' | 'induction';
@@ -330,16 +392,9 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
         );
       
       case 'client-portfolio':
-        return (
-          <ProfessionalPortfolio 
-            onBack={goBack}
-            onSelectClient={(clientId) => {
-              toast.success(`Cliente seleccionado: ${clientId}`);
-              // Al seleccionar un cliente, ir al dashboard triádico con el contexto del cliente
-              navigateToView('triadic-dashboard');
-            }}
-          />
-        );
+        // ProfessionalPortfolio resuelve el detalle de cliente en su propia
+        // vista interna, así que no necesita un callback de selección.
+        return <ProfessionalPortfolio onBack={goBack} />;
       
       case 'action-plan-tracker':
         return (
@@ -717,17 +772,18 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
           />
         );
       
-      case 'qr-emergency-access':
-        // Simular token desde URL parameters
+      case 'qr-emergency-access': {
+        // El token llega por query string al escanear el QR de emergencia.
         const urlParams = new URLSearchParams(window.location.search);
         const emergencyToken = urlParams.get('emergency_access') || 'QR-EMERGENCY-CONST001-2024';
-        
+
         return (
           <QREmergencyAccess
             token={emergencyToken}
             onComplete={() => setCurrentView('company-selector')}
           />
         );
+      }
       
       case 'color-system-demo':
         return (
@@ -787,7 +843,11 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-zinc-900 transition-colors">
-      {renderView()}
+      <DriveConnectionAlert />
+
+      <Suspense fallback={<ViewLoadingFallback />}>
+        {renderView()}
+      </Suspense>
 
       {/* Theme Toggle - Fixed top right - Visible en todas las vistas excepto company-selector */}
       {currentView !== 'company-selector' && (

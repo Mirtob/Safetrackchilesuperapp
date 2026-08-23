@@ -1,4 +1,4 @@
-import { motion } from 'motion/react';
+import { motion, type TargetAndTransition } from 'motion/react';
 
 interface LogoProps {
   size?: number;
@@ -7,7 +7,7 @@ interface LogoProps {
 }
 
 export function Logo({ size = 80, animate = 'none', className = '' }: LogoProps) {
-  const animations = {
+  const animations: Record<NonNullable<LogoProps['animate']>, TargetAndTransition> = {
     spin: {
       rotateY: [0, 360],
       transition: {

@@ -14,6 +14,8 @@ import {
   TimeEntry,
 } from '@/app/services/hoursTrackingService';
 import { isSupabaseConfigured } from '@/app/services/supabase';
+import { useFinanceSettings } from '@/app/hooks/useFinanceSettings';
+import { formatMoney } from '@/app/services/financeSettings';
 
 interface ClientCompany {
   id: string;
@@ -87,6 +89,7 @@ const MOCK_TIME_ENTRIES: TimeEntry[] = [
 ];
 
 export function HoursTracking({ clients }: HoursTrackingProps) {
+  const { settings } = useFinanceSettings();
   const [activeEntry, setActiveEntry] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
@@ -119,13 +122,7 @@ export function HoursTracking({ clients }: HoursTrackingProps) {
     return () => { cancelled = true; };
   }, [clients, canPersist]);
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-CL', {
-      style: 'currency',
-      currency: 'CLP',
-      minimumFractionDigits: 0
-    }).format(amount);
-  };
+  const formatCurrency = (amount: number) => formatMoney(amount, settings);
 
   // Calcular métricas
   const completedEntries = timeEntries.filter(e => e.status === 'completed');
@@ -154,7 +151,8 @@ export function HoursTracking({ clients }: HoursTrackingProps) {
     const [startH, startM] = entry.startTime.split(':').map(Number);
     const durationHours = Math.max(0, Math.round(((now.getHours() * 60 + now.getMinutes()) - (startH * 60 + startM)) / 60 * 100) / 100);
     const client = clients.find(c => c.id === entry.companyId);
-    const rate = entry.hourlyRate ?? client?.hourlyRate ?? 0;
+    // Si el cliente no tiene tarifa propia, se usa la del usuario por defecto.
+    const rate = entry.hourlyRate ?? client?.hourlyRate ?? settings.defaultHourlyRate;
     const amount = Math.round(durationHours * rate);
 
     try {

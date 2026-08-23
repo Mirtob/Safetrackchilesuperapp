@@ -3,7 +3,8 @@ import { Shield, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Logo } from '@/app/components/Logo';
-import { supabase, isSupabaseConfigured } from '@/app/services/supabase';
+import { isSupabaseConfigured } from '@/app/services/supabase';
+import { signInWithGoogle, isGoogleConfigured } from '@/app/services/googleAuth';
 
 // Mantenemos GoogleUserData para compatibilidad con otros componentes que lo importen
 export interface GoogleUserData {
@@ -12,16 +13,6 @@ export interface GoogleUserData {
   picture: string;
   accessToken: string;
 }
-
-const DRIVE_SCOPES = [
-  'https://www.googleapis.com/auth/drive.file',
-  'https://www.googleapis.com/auth/calendar.events',
-].join(' ');
-
-const isGoogleConfigured = Boolean(
-  import.meta.env.VITE_GOOGLE_CLIENT_ID &&
-  !import.meta.env.VITE_GOOGLE_CLIENT_ID.startsWith('REEMPLAZA')
-);
 
 export function GoogleLogin() {
   const [isLoading, setIsLoading] = useState(false);
@@ -48,17 +39,10 @@ export function GoogleLogin() {
     setIsLoading(true);
     setError(null);
 
-    const { error: authError } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        scopes: DRIVE_SCOPES,
-        redirectTo: window.location.origin,
-        queryParams: { access_type: 'offline', prompt: 'consent' },
-      },
-    });
+    const { error: authError } = await signInWithGoogle();
 
     if (authError) {
-      setError('Error al conectar con Google. Verifica la configuración.');
+      setError(authError);
       setIsLoading(false);
     }
     // Si no hay error, la página se redirige automáticamente a Google

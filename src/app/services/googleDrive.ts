@@ -44,13 +44,133 @@ export const MIME_TYPES = {
 // TOKEN DE ACCESO
 // ============================================================
 
-let _accessToken = '';
+/**
+ * Supabase entrega `session.provider_token` (el access token de Google) UNA sola
+ * vez: en el redirect del OAuth. Las sesiones restauradas desde localStorage no
+ * lo traen. Por eso lo persistimos aquí; si no, Drive dejaba de funcionar en
+ * cuanto el usuario recargaba la página.
+ *
+ * El token de Google vive ~1h y no se puede refrescar desde el browser (haría
+ * falta el client_secret). Cuando expira marcamos Drive como desconectado y la
+ * UI ofrece reconectar, en vez de fallar en silencio.
+ */
 
-export const setAccessToken = (token: string): void => {
-  _accessToken = token;
+const TOKEN_STORAGE_KEY = 'safetrack_drive_token';
+
+/** Margen bajo la hora real de vida del token, para no usarlo justo al filo. */
+const TOKEN_TTL_MS = 55 * 60 * 1000;
+
+interface StoredToken {
+  token: string;
+  expiresAt: number;
+}
+
+/** Error de autorización de Drive, distinguible de un fallo de red o de API. */
+export class DriveAuthError extends Error {
+  constructor(message = 'Se perdió la autorización de Google Drive. Vuelve a conectar tu cuenta.') {
+    super(message);
+    this.name = 'DriveAuthError';
+  }
+}
+
+let _accessToken = '';
+let _expiresAt = 0;
+
+type AuthListener = (authorized: boolean) => void;
+const _listeners = new Set<AuthListener>();
+
+const notify = (): void => {
+  const authorized = isAuthorized();
+  _listeners.forEach(fn => fn(authorized));
 };
 
-const isAuthorized = (): boolean => Boolean(_accessToken);
+/** Suscribe a cambios de autorización. Devuelve la función para desuscribir. */
+export const onAuthChange = (fn: AuthListener): (() => void) => {
+  _listeners.add(fn);
+  return () => _listeners.delete(fn);
+};
+
+const readStoredToken = (): StoredToken | null => {
+  try {
+    const raw = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredToken;
+    if (!parsed?.token || typeof parsed.expiresAt !== 'number') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Guarda el access token de Drive. Pasar '' lo borra (logout).
+ * `expiresAt` permite restaurar un token ya persistido sin reiniciar su reloj.
+ */
+export const setAccessToken = (token: string, expiresAt?: number): void => {
+  _accessToken = token;
+  _expiresAt = token ? (expiresAt ?? Date.now() + TOKEN_TTL_MS) : 0;
+
+  try {
+    if (token) {
+      localStorage.setItem(
+        TOKEN_STORAGE_KEY,
+        JSON.stringify({ token, expiresAt: _expiresAt } satisfies StoredToken)
+      );
+    } else {
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+    }
+  } catch {
+    // localStorage lleno o bloqueado: seguimos con el token solo en memoria.
+  }
+
+  notify();
+};
+
+/**
+ * Restaura el token persistido en cargas donde Supabase no entrega
+ * `provider_token`. Devuelve true si quedó un token válido.
+ */
+export const restoreAccessToken = (): boolean => {
+  const stored = readStoredToken();
+  if (!stored) return false;
+
+  if (stored.expiresAt <= Date.now()) {
+    setAccessToken('');
+    return false;
+  }
+
+  _accessToken = stored.token;
+  _expiresAt = stored.expiresAt;
+  notify();
+  return true;
+};
+
+const isAuthorized = (): boolean => Boolean(_accessToken) && _expiresAt > Date.now();
+
+/** Descarta el token actual: expiró o Google lo rechazó. */
+const invalidateToken = (): void => {
+  if (_accessToken) setAccessToken('');
+};
+
+/** Convierte un 401/403 de Drive en DriveAuthError y limpia el token. */
+const assertOk = async (res: Response, fallback: string): Promise<void> => {
+  if (res.ok) return;
+
+  if (res.status === 401 || res.status === 403) {
+    invalidateToken();
+    throw new DriveAuthError();
+  }
+
+  const err = await res.json().catch(() => ({}));
+  throw new Error(err?.error?.message || `${fallback}: ${res.status}`);
+};
+
+/** Guarda para las llamadas: lanza DriveAuthError si no hay token utilizable. */
+const requireAuth = (): void => {
+  if (isAuthorized()) return;
+  invalidateToken();
+  throw new DriveAuthError();
+};
 
 // ============================================================
 // HELPER DE REQUEST
@@ -60,7 +180,7 @@ const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
 
 async function driveGet<T>(path: string, params: Record<string, string> = {}): Promise<T> {
-  if (!isAuthorized()) throw new Error('Sin autorización de Google Drive. Inicia sesión primero.');
+  requireAuth();
 
   const url = new URL(`${DRIVE_API}/${path}`);
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
@@ -69,16 +189,12 @@ async function driveGet<T>(path: string, params: Record<string, string> = {}): P
     headers: { Authorization: `Bearer ${_accessToken}` },
   });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `Error Drive API: ${res.status}`);
-  }
-
+  await assertOk(res, 'Error Drive API');
   return res.json();
 }
 
 async function drivePost<T>(path: string, body: unknown): Promise<T> {
-  if (!isAuthorized()) throw new Error('Sin autorización de Google Drive. Inicia sesión primero.');
+  requireAuth();
 
   const res = await fetch(`${DRIVE_API}/${path}`, {
     method: 'POST',
@@ -89,11 +205,7 @@ async function drivePost<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `Error Drive API: ${res.status}`);
-  }
-
+  await assertOk(res, 'Error Drive API');
   return res.json();
 }
 
@@ -274,7 +386,7 @@ export const uploadFile = async (
   parentFolderId: string,
   mimeType = 'application/pdf'
 ): Promise<DriveFile> => {
-  if (!isAuthorized()) throw new Error('Sin autorización de Google Drive. Inicia sesión primero.');
+  requireAuth();
 
   const metadata = { name: fileName, parents: [parentFolderId], mimeType };
   const form = new FormData();
@@ -287,11 +399,7 @@ export const uploadFile = async (
     body: form,
   });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `Error al subir archivo: ${res.status}`);
-  }
-
+  await assertOk(res, 'Error al subir archivo');
   return res.json();
 };
 
@@ -355,7 +463,9 @@ export const formatModifiedDate = (dateString: string): string => {
 
 export const GoogleDriveService = {
   setAccessToken,
+  restoreAccessToken,
   isAuthorized,
+  onAuthChange,
 
   // Carpetas
   listCompanyFolders,

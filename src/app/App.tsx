@@ -6,7 +6,7 @@ import { CompanyProvider } from '@/app/context/CompanyContext';
 import { GoogleLogin } from '@/app/components/GoogleLogin';
 import { LoadingScreen } from '@/app/components/LoadingScreen';
 import { supabase, isSupabaseConfigured } from '@/app/services/supabase';
-import { GoogleDriveService } from '@/app/services/googleDrive';
+import { GoogleDriveService, DriveAuthError } from '@/app/services/googleDrive';
 
 export interface UserData {
   email: string;
@@ -28,8 +28,13 @@ export default function App() {
         picture: meta?.avatar_url || meta?.picture || '',
       });
       setIsAuthenticated(true);
+
+      // provider_token solo llega en el redirect del OAuth. En sesiones
+      // restauradas viene vacío, así que recuperamos el que persistimos.
       if (session.provider_token) {
         GoogleDriveService.setAccessToken(session.provider_token);
+      } else {
+        GoogleDriveService.restoreAccessToken();
       }
     } else {
       setUserData(null);
@@ -38,11 +43,17 @@ export default function App() {
     }
   };
 
-  // Bootstrap de estructura Drive al autenticar (solo con Supabase real, no demo)
+  // Bootstrap de estructura Drive al autenticar (solo con Supabase real, no demo).
+  // Sin autorización de Drive no se intenta: la app funciona igual y el banner
+  // de DriveConnectionAlert le ofrece al usuario reconectar.
   useEffect(() => {
-    if (isAuthenticated && isSupabaseConfigured) {
-      GoogleDriveService.bootstrapDriveStructure().catch(console.error);
-    }
+    if (!isAuthenticated || !isSupabaseConfigured) return;
+    if (!GoogleDriveService.isAuthorized()) return;
+
+    GoogleDriveService.bootstrapDriveStructure().catch(err => {
+      if (err instanceof DriveAuthError) return; // el banner ya lo comunica
+      console.error('[Drive] bootstrap falló:', err);
+    });
   }, [isAuthenticated]);
 
   useEffect(() => {

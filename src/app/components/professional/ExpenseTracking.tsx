@@ -13,6 +13,32 @@ import {
   Expense,
 } from '@/app/services/expensesService';
 import { isSupabaseConfigured } from '@/app/services/supabase';
+import { useFinanceSettings } from '@/app/hooks/useFinanceSettings';
+import {
+  formatMoney,
+  getExpenseCategory,
+  type ExpenseCategory,
+} from '@/app/services/financeSettings';
+
+/** Icono por categoría de fábrica; las creadas por el usuario usan Receipt. */
+const CATEGORY_ICONS: Record<string, typeof Receipt> = {
+  transport: Car,
+  fuel: Car,
+  food: Coffee,
+  accommodation: MapPin,
+  materials: Receipt,
+  other: Receipt,
+};
+
+const CATEGORY_COLOR_CLASSES: Record<ExpenseCategory['color'], string> = {
+  blue: 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400',
+  orange: 'bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400',
+  green: 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400',
+  purple: 'bg-purple-100 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400',
+  yellow: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400',
+  red: 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400',
+  zinc: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-900/20 dark:text-zinc-400',
+};
 
 interface ClientCompany {
   id: string;
@@ -94,6 +120,7 @@ const MOCK_EXPENSES: Expense[] = [
 ];
 
 export function ExpenseTracking({ clients }: ExpenseTrackingProps) {
+  const { settings } = useFinanceSettings();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [expenses, setExpenses] = useState<Expense[]>(MOCK_EXPENSES);
   const [isLoadingExpenses, setIsLoadingExpenses] = useState(true);
@@ -123,24 +150,19 @@ export function ExpenseTracking({ clients }: ExpenseTrackingProps) {
     return () => { cancelled = true; };
   }, [clients, canPersist]);
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-CL', {
-      style: 'currency',
-      currency: 'CLP',
-      minimumFractionDigits: 0
-    }).format(amount);
-  };
+  const formatCurrency = (amount: number) => formatMoney(amount, settings);
 
-  const getCategoryInfo = (category: Expense['category']) => {
-    const categories = {
-      transport: { label: 'Transporte', icon: Car, color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400' },
-      fuel: { label: 'Combustible', icon: Car, color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400' },
-      food: { label: 'Alimentación', icon: Coffee, color: 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' },
-      accommodation: { label: 'Alojamiento', icon: MapPin, color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400' },
-      materials: { label: 'Materiales', icon: Receipt, color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400' },
-      other: { label: 'Otros', icon: Receipt, color: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-900/20 dark:text-zinc-400' }
+  /**
+   * Resuelve el descriptor visual de una categoría desde la configuración del
+   * usuario, que puede haber creado las suyas además de las de fábrica.
+   */
+  const getCategoryInfo = (category: string) => {
+    const found = getExpenseCategory(category, settings);
+    return {
+      label: found.label,
+      icon: CATEGORY_ICONS[found.id] || Receipt,
+      color: CATEGORY_COLOR_CLASSES[found.color],
     };
-    return categories[category];
   };
 
   const getStatusBadge = (status: Expense['status']) => {

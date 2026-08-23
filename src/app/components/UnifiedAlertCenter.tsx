@@ -70,7 +70,13 @@ interface MaintenanceAlert {
 
 type Alert = TrainingAlert | MaintenanceAlert;
 
-export function UnifiedAlertCenter({ onBack }: UnifiedAlertCenterProps) {
+export function UnifiedAlertCenter({
+  onBack,
+  onScheduleTraining,
+  onScheduleMaintenance,
+  onViewWorker,
+  onViewAsset,
+}: UnifiedAlertCenterProps) {
   const [activeTab, setActiveTab] = useState<'all' | 'training' | 'maintenance' | 'overdue'>('overdue');
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
@@ -209,7 +215,9 @@ export function UnifiedAlertCenter({ onBack }: UnifiedAlertCenterProps) {
 
   const handleConfirmSchedule = () => {
     toast.success('✅ Mantención Agendada', {
-      description: `La mantención de ${selectedAlert?.assetName || selectedAlert?.workerName} ha sido programada exitosamente`
+      description: `La mantención de ${
+        selectedAlert?.type === 'training' ? selectedAlert.workerName : selectedAlert?.assetName
+      } ha sido programada exitosamente`
     });
     setShowScheduleModal(false);
     setSelectedAlert(null);

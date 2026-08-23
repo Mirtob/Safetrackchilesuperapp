@@ -310,13 +310,13 @@ export function IncidentFollowUp({ onBack, companyId, initialIncidentId }: Incid
     return () => { cancelled = true; };
   }, [selectedIncident, canPersist]);
 
-  const [newAction, setNewAction] = useState({
+  const [newAction, setNewAction] = useState<Omit<Action, 'id' | 'incidentId' | 'status' | 'createdAt'>>({
     type: 'corrective',
     title: '',
     description: '',
     responsible: '',
     deadline: new Date().toISOString().split('T')[0],
-    priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent'
+    priority: 'medium'
   });
 
   const [newMedicalRecord, setNewMedicalRecord] = useState({
