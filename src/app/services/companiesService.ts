@@ -33,6 +33,16 @@ const mapCompany = (row: any): Company => ({
   phone: row.phone || '',
   email: row.email || '',
   mutual: row.mutual || '',
+
+  // Destinatarios de documentos. Si no se cargó un WhatsApp propio se usa el
+  // teléfono de contacto, que es el número que el ingeniero ya tiene a mano.
+  whatsapp: row.whatsapp || row.phone || '',
+  hrEmails: Array.isArray(row.hr_emails) ? row.hr_emails : [],
+
+  geofenceRadius: Number(row.geofence_radius_m) || 150,
+  notifyOnArrival: row.notify_on_arrival !== false,
+  notifyOnDeparture: row.notify_on_departure !== false,
+
   branches: (row.branches || []).map(mapBranch),
 });
 
@@ -70,6 +80,11 @@ export const createCompany = async (
       phone: company.phone || null,
       email: company.email || null,
       mutual: company.mutual || null,
+      whatsapp: company.whatsapp || null,
+      hr_emails: company.hrEmails || [],
+      geofence_radius_m: company.geofenceRadius || 150,
+      notify_on_arrival: company.notifyOnArrival ?? true,
+      notify_on_departure: company.notifyOnDeparture ?? true,
     })
     .select()
     .single();

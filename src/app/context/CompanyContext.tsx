@@ -31,6 +31,18 @@ export interface Company {
   phone: string;
   email: string;
   mutual?: string;
+
+  // ── Destinatarios de documentos ───────────────────────────────────────────
+  /** WhatsApp de la empresa; cae al teléfono de contacto si no se cargó uno. */
+  whatsapp?: string;
+  /** Correos que reciben copia de los documentos generados. */
+  hrEmails?: string[];
+
+  // ── Faena por GPS ─────────────────────────────────────────────────────────
+  /** Radio en metros para dar por iniciada la faena al llegar. */
+  geofenceRadius?: number;
+  notifyOnArrival?: boolean;
+  notifyOnDeparture?: boolean;
 }
 
 interface CompanyContextType {

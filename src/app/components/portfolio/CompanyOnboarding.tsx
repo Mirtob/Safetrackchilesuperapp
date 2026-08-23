@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Building2, Plus, Trash2, MapPin, Save, Calendar, Settings, HardDrive, Navigation } from 'lucide-react';
+import { ArrowLeft, Building2, Plus, Trash2, MapPin, Save, Calendar, Settings, HardDrive, Navigation, Send, Clock, X } from 'lucide-react';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
@@ -9,6 +9,7 @@ import { Badge } from '@/app/components/ui/badge';
 import { toast } from 'sonner';
 import { GoogleDriveService } from '@/app/services/googleDrive';
 import { LocationPicker } from '@/app/components/LocationPicker';
+import { useFinanceSettings } from '@/app/hooks/useFinanceSettings';
 
 const isMapsConfigured = Boolean(import.meta.env.VITE_GOOGLE_MAPS_API_KEY);
 
@@ -20,7 +21,7 @@ interface Sector {
   location?: string;
 }
 
-interface CompanyData {
+export interface CompanyData {
   name: string;
   rut: string;
   address: string;
@@ -33,6 +34,28 @@ interface CompanyData {
   contractStartDate: string;
   contractType: 'consultoria' | 'asesoria' | 'completo';
   sectors: Sector[];
+
+  // ── Envío de documentos ───────────────────────────────────────────────────
+  // Se piden al crear la empresa para que la pantalla de Envío de Documentos
+  // tenga destinatarios desde el primer día, sin volver a preguntar.
+  /** Número con código país para el envío por WhatsApp. */
+  whatsapp: string;
+  /** Correos que reciben copia: RRHH, prevención, gerencia. */
+  hrEmails: string[];
+
+  // ── Faena y cobro ─────────────────────────────────────────────────────────
+  /** Valor hora hombre. Base de todo cálculo de honorarios de esta empresa. */
+  hourlyRate: number;
+  /** Cada cuánto se cierra el resumen que va a la boleta. */
+  billingCycle: 'daily' | 'weekly' | 'biweekly' | 'monthly';
+  /** Día de pago acordado, dentro del mes. */
+  paymentDay: number;
+  /** Radio en metros para dar por iniciada la faena al llegar. */
+  geofenceRadius: number;
+  /** Minutos mínimos para que una visita se considere facturable. */
+  minBillableMinutes: number;
+  notifyOnArrival: boolean;
+  notifyOnDeparture: boolean;
 }
 
 interface CompanyOnboardingProps {
@@ -41,6 +64,8 @@ interface CompanyOnboardingProps {
 }
 
 export function CompanyOnboarding({ onBack, onComplete }: CompanyOnboardingProps) {
+  const { settings: financeSettings } = useFinanceSettings();
+
   const [step, setStep] = useState<'basic' | 'sectors' | 'summary'>('basic');
   const [companyData, setCompanyData] = useState<CompanyData>({
     name: '',
@@ -53,8 +78,40 @@ export function CompanyOnboarding({ onBack, onComplete }: CompanyOnboardingProps
     workerCount: 0,
     contractStartDate: '',
     contractType: 'asesoria',
-    sectors: []
+    sectors: [],
+
+    whatsapp: '',
+    hrEmails: [],
+
+    // Arranca con los valores por defecto del profesional; se ajustan por empresa.
+    hourlyRate: financeSettings.defaultHourlyRate,
+    billingCycle: 'monthly',
+    paymentDay: financeSettings.defaultPaymentDay,
+    geofenceRadius: 150,
+    minBillableMinutes: 15,
+    notifyOnArrival: true,
+    notifyOnDeparture: true,
   });
+
+  const [newHrEmail, setNewHrEmail] = useState('');
+
+  const addHrEmail = () => {
+    const email = newHrEmail.trim().toLowerCase();
+    if (!email) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error('Correo no válido');
+      return;
+    }
+    if (companyData.hrEmails.includes(email)) {
+      toast.error('Ese correo ya está en la lista');
+      return;
+    }
+    setCompanyData(prev => ({ ...prev, hrEmails: [...prev.hrEmails, email] }));
+    setNewHrEmail('');
+  };
+
+  const removeHrEmail = (email: string) =>
+    setCompanyData(prev => ({ ...prev, hrEmails: prev.hrEmails.filter(e => e !== email) }));
 
   const [isDriveLoading, setIsDriveLoading] = useState(false);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
@@ -382,6 +439,199 @@ export function CompanyOnboarding({ onBack, onComplete }: CompanyOnboardingProps
                   onChange={(e) => setCompanyData(prev => ({ ...prev, contractStartDate: e.target.value }))}
                   className="mt-1"
                 />
+              </div>
+            </div>
+
+            {/* ── Destinatarios de documentos ──────────────────────────────
+                Se piden acá para que el envío de charlas, EPP e informes
+                funcione desde el primer día, sin tener que configurarlo
+                aparte cada vez. */}
+            <div className="mt-8 border-t border-zinc-200 pt-6 dark:border-zinc-700">
+              <div className="mb-4 flex items-start gap-3">
+                <div className="rounded-lg bg-blue-100 p-2 dark:bg-blue-900/30">
+                  <Send className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-zinc-900 dark:text-white">Envío de documentos</h3>
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                    A dónde llegan las charlas firmadas, entregas de EPP e informes de esta empresa.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <Label htmlFor="whatsapp">WhatsApp de la empresa</Label>
+                  <Input
+                    id="whatsapp"
+                    value={companyData.whatsapp}
+                    onChange={(e) => setCompanyData(prev => ({ ...prev, whatsapp: e.target.value }))}
+                    placeholder="+56 9 1234 5678"
+                    className="mt-1"
+                  />
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                    Con código de país. Si lo dejas vacío se usa el teléfono de contacto.
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="hrEmail">Correos que reciben copia</Label>
+                  <div className="mt-1 flex gap-2">
+                    <Input
+                      id="hrEmail"
+                      type="email"
+                      value={newHrEmail}
+                      onChange={(e) => setNewHrEmail(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addHrEmail();
+                        }
+                      }}
+                      placeholder="rrhh@empresa.cl"
+                    />
+                    <Button type="button" variant="outline" onClick={addHrEmail}>
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  {companyData.hrEmails.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {companyData.hrEmails.map(email => (
+                        <Badge key={email} variant="secondary" className="gap-1 pr-1">
+                          {email}
+                          <button
+                            type="button"
+                            onClick={() => removeHrEmail(email)}
+                            aria-label={`Quitar ${email}`}
+                            className="rounded-full p-0.5 hover:bg-zinc-300 dark:hover:bg-zinc-600"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* ── Faena y honorarios ───────────────────────────────────────
+                El valor HH define todo el cobro de esta empresa: las horas que
+                el GPS registre se multiplican por él. */}
+            <div className="mt-8 border-t border-zinc-200 pt-6 dark:border-zinc-700">
+              <div className="mb-4 flex items-start gap-3">
+                <div className="rounded-lg bg-[#FF8C00]/10 p-2">
+                  <Clock className="h-5 w-5 text-[#FF8C00]" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-zinc-900 dark:text-white">Faena y honorarios</h3>
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                    La app cronometra tu tiempo en planta por GPS y lo valoriza con este valor hora.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <Label htmlFor="hourlyRate">Valor hora hombre (HH) *</Label>
+                  <Input
+                    id="hourlyRate"
+                    type="number"
+                    min="0"
+                    value={companyData.hourlyRate || ''}
+                    onChange={(e) => setCompanyData(prev => ({ ...prev, hourlyRate: Number(e.target.value) || 0 }))}
+                    placeholder="35000"
+                    className="mt-1"
+                  />
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                    Base de todo el cobro a esta empresa.
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="billingCycle">Cada cuánto se cobra</Label>
+                  <select
+                    id="billingCycle"
+                    value={companyData.billingCycle}
+                    onChange={(e) => setCompanyData(prev => ({ ...prev, billingCycle: e.target.value as CompanyData['billingCycle'] }))}
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                  >
+                    <option value="daily">Diario</option>
+                    <option value="weekly">Semanal</option>
+                    <option value="biweekly">Quincenal</option>
+                    <option value="monthly">Mensual</option>
+                  </select>
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                    Define cada cuánto se cierra el resumen para la boleta.
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="paymentDay">Día de pago</Label>
+                  <Input
+                    id="paymentDay"
+                    type="number"
+                    min="1"
+                    max="31"
+                    value={companyData.paymentDay}
+                    onChange={(e) => setCompanyData(prev => ({ ...prev, paymentDay: Number(e.target.value) || 1 }))}
+                    className="mt-1"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="minBillable">Mínimo facturable (minutos)</Label>
+                  <Input
+                    id="minBillable"
+                    type="number"
+                    min="0"
+                    max="480"
+                    value={companyData.minBillableMinutes}
+                    onChange={(e) => setCompanyData(prev => ({ ...prev, minBillableMinutes: Number(e.target.value) || 0 }))}
+                    className="mt-1"
+                  />
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                    Visitas más cortas no generan cobro.
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="geofence">Radio de detección (metros)</Label>
+                  <Input
+                    id="geofence"
+                    type="number"
+                    min="30"
+                    max="2000"
+                    value={companyData.geofenceRadius}
+                    onChange={(e) => setCompanyData(prev => ({ ...prev, geofenceRadius: Number(e.target.value) || 150 }))}
+                    className="mt-1"
+                  />
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                    Distancia a la que se considera que llegaste. Amplíalo en faenas extensas.
+                  </p>
+                </div>
+
+                <div className="flex flex-col justify-center gap-3">
+                  <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                    <input
+                      type="checkbox"
+                      checked={companyData.notifyOnArrival}
+                      onChange={(e) => setCompanyData(prev => ({ ...prev, notifyOnArrival: e.target.checked }))}
+                      className="h-4 w-4 rounded border-zinc-300"
+                    />
+                    Avisar a la empresa cuando llego
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                    <input
+                      type="checkbox"
+                      checked={companyData.notifyOnDeparture}
+                      onChange={(e) => setCompanyData(prev => ({ ...prev, notifyOnDeparture: e.target.checked }))}
+                      className="h-4 w-4 rounded border-zinc-300"
+                    />
+                    Avisar cuando termino la faena
+                  </label>
+                </div>
               </div>
             </div>
 

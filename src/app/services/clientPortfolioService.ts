@@ -7,9 +7,14 @@ export interface ClientCompany {
   rut: string;
   location: string;
   contractType: 'consultoria' | 'asesoria' | 'completo';
+  /** Valor hora hombre: base de todo el cobro a esta empresa. */
   hourlyRate: number;
   monthlyFee?: number;
   paymentDay: number;
+  /** Cada cuánto se cierra el resumen que va a la boleta. */
+  billingCycle: 'daily' | 'weekly' | 'biweekly' | 'monthly';
+  /** Visitas más cortas que esto no generan cobro. */
+  minBillableMinutes: number;
   lastPayment?: string;
   nextPayment?: string;
   hoursThisMonth: number;
@@ -21,6 +26,9 @@ export interface ClientCompany {
   hasBillingProfile: boolean;
 }
 
+/** Cada cuánto se cierra el resumen de horas que va a la boleta. */
+export type BillingCycle = 'daily' | 'weekly' | 'biweekly' | 'monthly';
+
 export interface BillingProfileInput {
   contractType: ClientCompany['contractType'];
   hourlyRate: number;
@@ -28,6 +36,9 @@ export interface BillingProfileInput {
   paymentDay: number;
   status: ClientCompany['status'];
   brandColor: string;
+  billingCycle?: BillingCycle;
+  /** Visitas más cortas que esto no generan cobro. */
+  minBillableMinutes?: number;
 }
 
 const DEFAULT_COLORS = ['#0055A4', '#DC2626', '#F59E0B', '#10B981', '#7C3AED', '#0EA5E9'];
@@ -88,6 +99,8 @@ export const fetchClientPortfolio = async (): Promise<ClientCompany[]> => {
       hourlyRate: profile ? Number(profile.hourly_rate) : 0,
       monthlyFee: profile?.monthly_fee != null ? Number(profile.monthly_fee) : undefined,
       paymentDay: profile?.payment_day || 30,
+      billingCycle: (profile?.billing_cycle || 'monthly') as BillingCycle,
+      minBillableMinutes: profile?.min_billable_minutes ?? 15,
       nextPayment: nextDueByCompany.get(company.id),
       hoursThisMonth: hoursTotals.get(company.id) || 0,
       pendingAmount: pendingTotals.get(company.id) || 0,
@@ -114,6 +127,8 @@ export const upsertBillingProfile = async (
       payment_day: input.paymentDay,
       status: input.status,
       brand_color: input.brandColor,
+      billing_cycle: input.billingCycle || 'monthly',
+      min_billable_minutes: input.minBillableMinutes ?? 15,
     }, { onConflict: 'company_id' });
 
   if (error) throw error;

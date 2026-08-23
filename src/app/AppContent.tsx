@@ -14,6 +14,9 @@ import { CriticalAccidentFAB } from '@/app/components/CriticalAccidentFAB';
 import { IntelligentSyncIndicator } from '@/app/components/IntelligentSyncIndicator';
 import { DriveConnectionAlert } from '@/app/components/DriveConnectionAlert';
 import { ViewErrorBoundary } from '@/app/components/ViewErrorBoundary';
+import { ActiveShiftBar } from '@/app/components/ActiveShiftBar';
+import { useAutoShiftTracking } from '@/app/hooks/useAutoShiftTracking';
+import { fetchClientPortfolio, type ClientCompany } from '@/app/services/clientPortfolioService';
 
 // ── Vistas bajo demanda: un chunk por módulo ──────────────────────────────────
 // Antes, estos ~40 imports estáticos arrastraban recharts, jspdf, xlsx,
@@ -201,6 +204,29 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const { companies, isLoading: companiesLoading, addCompany, addBranch } = useCompanies();
   const selectedCompanyObj = companies.find(c => c.id === selectedCompany) || null;
+
+  // Cartera con el valor HH de cada empresa: sin ella las faenas se registran
+  // sin tarifa y no se pueden valorizar.
+  const [billingClients, setBillingClients] = useState<ClientCompany[]>([]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    let cancelled = false;
+
+    fetchClientPortfolio()
+      .then(data => { if (!cancelled) setBillingClients(data); })
+      .catch(err => console.warn('[Faena] no se pudo cargar la cartera:', err.message));
+
+    return () => { cancelled = true; };
+  }, [companies.length]);
+
+  // Cronómetro de faena por GPS: abre al llegar a una empresa y cierra al salir.
+  const shiftTracking = useAutoShiftTracking({
+    companies,
+    clients: billingClients,
+    professionalName: userData?.name || '',
+    enabled: isSupabaseConfigured,
+  });
   const [currentFormType, setCurrentFormType] = useState<FormType>('inspection');
   const [currentTalkDeliveryType, setCurrentTalkDeliveryType] = useState<TalkDeliveryType>('talk');
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -845,6 +871,20 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-zinc-900 transition-colors">
       <DriveConnectionAlert />
+
+      {/* Estado de la faena en curso, visible en toda la app: el ingeniero debe
+          poder confirmar de un vistazo que su tiempo se está registrando. */}
+      {currentView !== 'company-selector' && (
+        <ActiveShiftBar
+          shift={shiftTracking.activeShift}
+          elapsedMinutes={shiftTracking.elapsedMinutes}
+          isTracking={shiftTracking.isTracking}
+          pendingNotice={shiftTracking.pendingNotice}
+          onDismissNotice={shiftTracking.dismissPendingNotice}
+          onCloseShift={shiftTracking.closeShiftNow}
+          onStartTracking={shiftTracking.startTracking}
+        />
+      )}
 
       <ViewErrorBoundary resetKey={currentView}>
         <Suspense fallback={<ViewLoadingFallback />}>

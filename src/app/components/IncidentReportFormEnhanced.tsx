@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { VoiceInput } from '@/app/components/VoiceInput';
+import { DictableInput, DictableTextarea } from '@/app/components/DictableField';
 import { DocumentPreviewAndSend } from '@/app/components/DocumentPreviewAndSend';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
@@ -149,13 +149,6 @@ export function IncidentReportFormEnhanced({ onBack, onSubmit }: IncidentReportF
     critical: { label: 'Crítica', color: 'bg-red-600', textColor: 'text-red-900 dark:text-red-100', bgColor: 'bg-red-50 dark:bg-red-950/20', icon: '🔴' }
   };
 
-  const handleVoiceTranscript = (transcript: string) => {
-    setFormData(prev => ({
-      ...prev,
-      description: prev.description + ' ' + transcript
-    }));
-    toast.success('✅ Audio transcrito', { duration: 2000 });
-  };
 
   const handleAddPhoto = () => {
     const newPhoto = `https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=400&h=300&fit=crop`;
@@ -799,9 +792,10 @@ export function IncidentReportFormEnhanced({ onBack, onSubmit }: IncidentReportF
               <Label className="text-slate-900 dark:text-white mb-3 block">
                 PASO 4: Título del Incidente *
               </Label>
-              <Input
+              <DictableInput
+                fieldLabel="título del incidente"
                 value={formData.title}
-                onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                onValueChange={(v) => setFormData(prev => ({ ...prev, title: v }))}
                 placeholder="Ej: Trabajador se golpeó con material mal apilado"
                 className="bg-white dark:bg-zinc-800 border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-white h-12"
               />
@@ -815,16 +809,12 @@ export function IncidentReportFormEnhanced({ onBack, onSubmit }: IncidentReportF
                 </Label>
               </div>
               
-              <VoiceInput
-                onTranscript={handleVoiceTranscript}
-                variant="card"
-              />
-
-              <Textarea
+              <DictableTextarea
+                fieldLabel="descripción del incidente"
                 value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                onValueChange={(v) => setFormData(prev => ({ ...prev, description: v }))}
                 placeholder="Describe detalladamente: ¿qué sucedió? ¿cómo ocurrió? ¿cuál fue la causa inmediata?"
-                className="bg-white dark:bg-zinc-800 border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-white placeholder:text-zinc-500 min-h-[120px] mt-3"
+                className="bg-white dark:bg-zinc-800 border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-white placeholder:text-zinc-500 min-h-[120px]"
               />
             </Card>
 
@@ -886,9 +876,10 @@ export function IncidentReportFormEnhanced({ onBack, onSubmit }: IncidentReportF
                   Acciones Inmediatas Tomadas (Opcional)
                 </Label>
               </div>
-              <Textarea
+              <DictableTextarea
+                fieldLabel="acciones inmediatas"
                 value={formData.immediateActions}
-                onChange={(e) => setFormData(prev => ({ ...prev, immediateActions: e.target.value }))}
+                onValueChange={(v) => setFormData(prev => ({ ...prev, immediateActions: v }))}
                 placeholder="¿Qué medidas se tomaron inmediatamente? Primeros auxilios, aislamiento de área, etc."
                 className="bg-white dark:bg-zinc-800 border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-white placeholder:text-zinc-500 min-h-[80px]"
               />

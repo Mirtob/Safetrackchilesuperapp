@@ -32,7 +32,7 @@ import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Textarea } from '@/app/components/ui/textarea';
 import { Badge } from '@/app/components/ui/badge';
-import { VoiceInput } from '@/app/components/VoiceInput';
+import { DictableInput, DictableTextarea } from '@/app/components/DictableField';
 import { DocumentPreviewAndSend } from '@/app/components/DocumentPreviewAndSend';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
@@ -818,9 +818,10 @@ export function AccidentReportFormComplete({ onBack, onSubmit }: AccidentReportF
               <Label className="text-slate-900 dark:text-white mb-2 block">
                 Lugar Específico Dentro del Sector *
               </Label>
-              <Input
+              <DictableInput
+                fieldLabel="ubicación específica"
                 value={formData.specificLocation}
-                onChange={(e) => setFormData(prev => ({ ...prev, specificLocation: e.target.value }))}
+                onValueChange={(v) => setFormData(prev => ({ ...prev, specificLocation: v }))}
                 placeholder="Ej: Pasillo central, junto a máquina cortadora #3"
                 className="h-12"
               />
@@ -917,19 +918,12 @@ export function AccidentReportFormComplete({ onBack, onSubmit }: AccidentReportF
                 PASO 3: ¿Cómo Ocurrió el Accidente? *
               </Label>
               
-              <VoiceInput
-                onTranscript={(transcript) => setFormData(prev => ({ 
-                  ...prev, 
-                  description: prev.description + ' ' + transcript 
-                }))}
-                variant="card"
-              />
-
-              <Textarea
+              <DictableTextarea
+                fieldLabel="descripción del accidente"
                 value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                onValueChange={(v) => setFormData(prev => ({ ...prev, description: v }))}
                 placeholder="Describe detalladamente: secuencia de eventos, actividad que realizaba, factores que contribuyeron..."
-                className="bg-white dark:bg-zinc-800 border-slate-200 dark:border-zinc-700 min-h-[120px] mt-3"
+                className="bg-white dark:bg-zinc-800 border-slate-200 dark:border-zinc-700 min-h-[120px]"
               />
             </Card>
 
@@ -1158,16 +1152,12 @@ export function AccidentReportFormComplete({ onBack, onSubmit }: AccidentReportF
                             </Button>
                           )}
 
-                          <VoiceInput
-                            onTranscript={(transcript) => handleWitnessTranscript(transcript, index)}
-                            variant="compact"
-                          />
-
-                          <Textarea
+                          <DictableTextarea
+                            fieldLabel={`declaración del testigo ${index + 1}`}
                             value={statement.statement}
-                            onChange={(e) => {
+                            onValueChange={(v) => {
                               const newStatements = [...formData.witnessStatements];
-                              newStatements[index].statement = e.target.value;
+                              newStatements[index].statement = v;
                               setFormData(prev => ({ ...prev, witnessStatements: newStatements }));
                             }}
                             placeholder="Declaración del testigo: qué vio, qué escuchó, en qué momento..."
@@ -1232,9 +1222,10 @@ export function AccidentReportFormComplete({ onBack, onSubmit }: AccidentReportF
               <Label className="text-slate-900 dark:text-white mb-3 block">
                 Acciones Inmediatas Tomadas
               </Label>
-              <Textarea
+              <DictableTextarea
+                fieldLabel="acciones inmediatas"
                 value={formData.immediateActions}
-                onChange={(e) => setFormData(prev => ({ ...prev, immediateActions: e.target.value }))}
+                onValueChange={(v) => setFormData(prev => ({ ...prev, immediateActions: v }))}
                 placeholder="Primeros auxilios prestados, aislamiento de área, llamada a emergencias, etc."
                 className="min-h-[80px]"
               />
@@ -1245,9 +1236,10 @@ export function AccidentReportFormComplete({ onBack, onSubmit }: AccidentReportF
               <Label className="text-slate-900 dark:text-white mb-3 block">
                 Atención Médica Recibida
               </Label>
-              <Textarea
+              <DictableTextarea
+                fieldLabel="atención médica"
                 value={formData.medicalAttention}
-                onChange={(e) => setFormData(prev => ({ ...prev, medicalAttention: e.target.value }))}
+                onValueChange={(v) => setFormData(prev => ({ ...prev, medicalAttention: v }))}
                 placeholder="Mutual, clínica, hospital, diagnóstico preliminar, derivación..."
                 className="min-h-[80px]"
               />
@@ -1258,9 +1250,10 @@ export function AccidentReportFormComplete({ onBack, onSubmit }: AccidentReportF
               <Label className="text-slate-900 dark:text-white mb-3 block">
                 Análisis Preliminar de Causas
               </Label>
-              <Textarea
+              <DictableTextarea
+                fieldLabel="análisis de causas"
                 value={formData.causeAnalysis}
-                onChange={(e) => setFormData(prev => ({ ...prev, causeAnalysis: e.target.value }))}
+                onValueChange={(v) => setFormData(prev => ({ ...prev, causeAnalysis: v }))}
                 placeholder="Causas inmediatas y básicas identificadas..."
                 className="min-h-[100px]"
               />

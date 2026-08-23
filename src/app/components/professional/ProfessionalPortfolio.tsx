@@ -5,7 +5,9 @@ import {
   ClientCompany,
 } from '@/app/services/clientPortfolioService';
 import { fetchTimeEntries, TimeEntry } from '@/app/services/hoursTrackingService';
-import { fetchInvoices, Invoice } from '@/app/services/billingService';
+import { fetchInvoices, createInvoice, Invoice } from '@/app/services/billingService';
+import { ShiftSummaryPanel } from '@/app/components/professional/ShiftSummaryPanel';
+import { buildPeriodSummary, markShiftsInvoiced } from '@/app/services/billingSummaryService';
 import { isSupabaseConfigured } from '@/app/services/supabase';
 import { toast } from 'sonner';
 import {
@@ -36,7 +38,8 @@ import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs';
-import { CompanyOnboarding } from '@/app/components/portfolio/CompanyOnboarding';
+import { CompanyOnboarding, type CompanyData } from '@/app/components/portfolio/CompanyOnboarding';
+import { createCompany } from '@/app/services/companiesService';
 import { AssetManagement } from '@/app/components/portfolio/AssetManagement';
 import { AnnualPlanGenerator } from '@/app/components/portfolio/AnnualPlanGenerator';
 import { ExpenseTracking } from '@/app/components/professional/ExpenseTracking';
@@ -65,6 +68,8 @@ const MOCK_CLIENTS: ClientCompany[] = [
     hourlyRate: 0,
     monthlyFee: 2500000,
     paymentDay: 30,
+    billingCycle: 'monthly',
+    minBillableMinutes: 15,
     lastPayment: '2025-12-30',
     nextPayment: '2026-01-30',
     hoursThisMonth: 45,
@@ -83,6 +88,8 @@ const MOCK_CLIENTS: ClientCompany[] = [
     contractType: 'consultoria',
     hourlyRate: 35000,
     paymentDay: 15,
+    billingCycle: 'monthly',
+    minBillableMinutes: 15,
     lastPayment: '2025-12-15',
     nextPayment: '2026-01-15',
     hoursThisMonth: 28,
@@ -102,6 +109,8 @@ const MOCK_CLIENTS: ClientCompany[] = [
     hourlyRate: 30000,
     monthlyFee: 800000,
     paymentDay: 5,
+    billingCycle: 'monthly',
+    minBillableMinutes: 15,
     lastPayment: '2026-01-05',
     nextPayment: '2026-02-05',
     hoursThisMonth: 18,
@@ -187,6 +196,39 @@ export function ProfessionalPortfolio({ onBack }: ProfessionalPortfolioProps) {
     return () => { cancelled = true; };
   }, [selectedClient, clients]);
 
+  /**
+   * Emite la boleta a partir del resumen de horas y marca esas faenas como
+   * cobradas, para que no vuelvan a aparecer en el próximo período.
+   */
+  const handleInvoiceFromSummary = async (companyId: string, amount: number, description: string) => {
+    const client = clients.find(c => c.id === companyId);
+    if (!client) return;
+
+    try {
+      const summary = await buildPeriodSummary({
+        companyId,
+        companyName: client.name,
+        cycle: client.billingCycle,
+        settings: financeSettings,
+      });
+
+      const invoice = await createInvoice(
+        { companyId, amount, description },
+        client.name,
+        financeSettings.invoicePrefix
+      );
+
+      await markShiftsInvoiced(summary.shifts.map(s => s.id), invoice.id);
+
+      setClients(await fetchClientPortfolio());
+      toast.success('✅ Boleta emitida', {
+        description: `${invoice.invoiceNumber} por ${formatMoney(amount, financeSettings)}.`,
+      });
+    } catch (err) {
+      toast.error('No se pudo emitir la boleta', { description: (err as Error).message });
+    }
+  };
+
   /** Abre el formulario precargado con las tarifas por defecto del usuario. */
   const openBillingForm = (clientId: string) => {
     setBillingForm({
@@ -266,8 +308,63 @@ export function ProfessionalPortfolio({ onBack }: ProfessionalPortfolioProps) {
   // Usa la moneda y el formato regional que el usuario definió en Configuración.
   const formatCurrency = (amount: number) => formatMoney(amount, financeSettings);
 
-  const handleOnboardingComplete = (companyData: any) => {
+  /**
+   * Crea la empresa y su perfil de cobro apenas termina el paso de datos.
+   *
+   * Antes el onboarding solo pasaba el objeto entre pantallas y al cerrar el
+   * plan anual lo descartaba: la empresa nunca llegaba a la base. Guardarla
+   * aquí también evita perder el trabajo si el usuario abandona los pasos
+   * siguientes.
+   */
+  const handleOnboardingComplete = async (companyData: CompanyData) => {
     setOnboardingData(companyData);
+
+    if (!isSupabaseConfigured) {
+      setCurrentView('asset-management');
+      return;
+    }
+
+    try {
+      const created = await createCompany({
+        name: companyData.name,
+        rut: companyData.rut,
+        address: companyData.address,
+        coordinates: companyData.coordinates,
+        industry: companyData.industry || 'General',
+        riskLevel: 'Medio',
+        workerCount: companyData.workerCount || 0,
+        contractStart: companyData.contractStartDate || '',
+        contactPerson: companyData.contactName,
+        phone: companyData.contactPhone,
+        email: companyData.contactEmail,
+        whatsapp: companyData.whatsapp,
+        hrEmails: companyData.hrEmails,
+        geofenceRadius: companyData.geofenceRadius,
+        notifyOnArrival: companyData.notifyOnArrival,
+        notifyOnDeparture: companyData.notifyOnDeparture,
+      });
+
+      // El valor HH y la política de pago viven en el perfil de facturación.
+      await upsertBillingProfile(created.id, {
+        contractType: companyData.contractType,
+        hourlyRate: companyData.hourlyRate,
+        paymentDay: companyData.paymentDay,
+        status: 'active',
+        brandColor: '#0055A4',
+        billingCycle: companyData.billingCycle,
+        minBillableMinutes: companyData.minBillableMinutes,
+      });
+
+      setClients(await fetchClientPortfolio());
+      toast.success('✅ Empresa creada', {
+        description: `${companyData.name} ya está en tu cartera con su valor HH configurado.`,
+      });
+    } catch (err) {
+      toast.error('No se pudo guardar la empresa', {
+        description: (err as Error).message,
+      });
+    }
+
     setCurrentView('asset-management');
   };
 
@@ -583,7 +680,7 @@ export function ProfessionalPortfolio({ onBack }: ProfessionalPortfolioProps) {
 
           {/* Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="w-full grid grid-cols-6 bg-zinc-100 dark:bg-zinc-900">
+            <TabsList className="w-full grid grid-cols-7 bg-zinc-100 dark:bg-zinc-900">
               <TabsTrigger value="clients" className="text-xs md:text-sm">
                 <Building2 className="w-4 h-4 mr-1 md:mr-2" />
                 <span className="hidden md:inline">Clientes</span>
@@ -599,6 +696,10 @@ export function ProfessionalPortfolio({ onBack }: ProfessionalPortfolioProps) {
               <TabsTrigger value="hours" className="text-xs md:text-sm">
                 <Clock className="w-4 h-4 mr-1 md:mr-2" />
                 <span className="hidden md:inline">Horas</span>
+              </TabsTrigger>
+              <TabsTrigger value="shifts" className="text-xs md:text-sm">
+                <Activity className="w-4 h-4 mr-1 md:mr-2" />
+                <span className="hidden md:inline">Resumen HH</span>
               </TabsTrigger>
               <TabsTrigger value="expenses" className="text-xs md:text-sm">
                 <Receipt className="w-4 h-4 mr-1 md:mr-2" />
@@ -922,6 +1023,14 @@ export function ProfessionalPortfolio({ onBack }: ProfessionalPortfolioProps) {
           {/* TAB: Gastos */}
           <TabsContent value="expenses">
             <ExpenseTracking clients={clients} />
+          </TabsContent>
+
+          {/* TAB: Resumen de horas para la boleta */}
+          <TabsContent value="shifts">
+            <ShiftSummaryPanel
+              clients={clients}
+              onCreateInvoice={handleInvoiceFromSummary}
+            />
           </TabsContent>
 
           {/* TAB: Configuración */}

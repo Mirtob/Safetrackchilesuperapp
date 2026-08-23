@@ -28,6 +28,8 @@ import { Separator } from '@/app/components/ui/separator';
 import { Switch } from '@/app/components/ui/switch';
 import { toast } from 'sonner';
 
+import { useCompanies } from '@/app/hooks/useCompanies';
+
 interface DocumentDeliverySystemProps {
   onBack: () => void;
 }
@@ -56,12 +58,16 @@ interface HRConfig {
   companyId: string;
   companyName: string;
   hrEmails: string[];
+  /** Número al que se envían los documentos por WhatsApp. */
+  whatsapp: string;
   autoSendCopy: boolean;
   includePDF: boolean;
   includeSignature: boolean;
 }
 
 export function DocumentDeliverySystem({ onBack }: DocumentDeliverySystemProps) {
+  // Los destinatarios salen de las empresas del usuario, no de una lista fija.
+  const { companies } = useCompanies();
   const [activeTab, setActiveTab] = useState<'deliveries' | 'config' | 'stats'>('deliveries');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'success' | 'pending' | 'failed'>('all');
@@ -143,32 +149,24 @@ export function DocumentDeliverySystem({ onBack }: DocumentDeliverySystemProps) 
     }
   ];
 
-  const hrConfigs: HRConfig[] = [
-    {
-      companyId: '1',
-      companyName: 'Constructora Los Andes S.A.',
-      hrEmails: ['rrhh@losandes.cl', 'prevencion@losandes.cl'],
-      autoSendCopy: true,
-      includePDF: true,
-      includeSignature: true
-    },
-    {
-      companyId: '2',
-      companyName: 'Minera Escondida Ltda.',
-      hrEmails: ['rrhh@escondida.cl'],
-      autoSendCopy: true,
-      includePDF: true,
-      includeSignature: true
-    },
-    {
-      companyId: '3',
-      companyName: 'Forestal Chile S.A.',
-      hrEmails: ['rrhh@forestal.cl', 'seguridad@forestal.cl'],
-      autoSendCopy: false,
-      includePDF: true,
-      includeSignature: false
-    }
-  ];
+  /**
+   * Destinatarios reales de cada empresa, cargados al crearla.
+   *
+   * Antes esta lista estaba escrita a mano en el código, así que la pantalla
+   * mostraba correos de ejemplo que no correspondían a los clientes del
+   * ingeniero. Ahora sale de lo que él mismo cargó en el alta de la empresa.
+   */
+  const hrConfigs: HRConfig[] = companies.map(company => ({
+    companyId: company.id,
+    companyName: company.name,
+    hrEmails: company.hrEmails?.length ? company.hrEmails : (company.email ? [company.email] : []),
+    whatsapp: company.whatsapp || company.phone || '',
+    autoSendCopy: (company.hrEmails?.length || 0) > 0,
+    includePDF: true,
+    includeSignature: true,
+  }));
+
+  const companiesWithoutContacts = hrConfigs.filter(c => c.hrEmails.length === 0 && !c.whatsapp);
 
   const filteredRecords = deliveryRecords.filter(record => {
     const matchesSearch = 
@@ -515,11 +513,27 @@ export function DocumentDeliverySystem({ onBack }: DocumentDeliverySystemProps) 
           {/* HR Config Tab */}
           <TabsContent value="config" className="space-y-4">
             <Card className="p-6 bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800">
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
                 <Building2 className="w-5 h-5 text-purple-600" />
-                Configuración de Correos RRHH por Empresa
+                Destinatarios por Empresa
               </h3>
-              
+              <p className="text-sm text-slate-600 dark:text-zinc-400 mb-4">
+                Estos datos se cargan al crear la empresa. Para cambiarlos, edita la empresa en tu cartera.
+              </p>
+
+              {companiesWithoutContacts.length > 0 && (
+                <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20">
+                  <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                    {companiesWithoutContacts.length === 1
+                      ? '1 empresa sin datos de envío'
+                      : `${companiesWithoutContacts.length} empresas sin datos de envío`}
+                  </p>
+                  <p className="text-xs text-amber-800 dark:text-amber-200">
+                    Sus documentos no se pueden enviar: {companiesWithoutContacts.map(c => c.companyName).join(', ')}.
+                  </p>
+                </div>
+              )}
+
               <ScrollArea className="h-[600px]">
                 <div className="space-y-4">
                   {hrConfigs.map(config => (
@@ -534,21 +548,47 @@ export function DocumentDeliverySystem({ onBack }: DocumentDeliverySystemProps) 
                       <div className="space-y-3">
                         <div>
                           <label className="text-sm font-medium text-slate-700 dark:text-zinc-300 mb-2 block">
-                            Correos de RRHH (uno por línea)
+                            WhatsApp
                           </label>
-                          <div className="space-y-2">
-                            {config.hrEmails.map((email, idx) => (
-                              <div key={idx} className="flex items-center gap-2">
-                                <Mail className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                                <Input
-                                  type="email"
-                                  value={email}
-                                  className="bg-white dark:bg-zinc-800 border-slate-200 dark:border-zinc-700"
-                                  readOnly
-                                />
-                              </div>
-                            ))}
-                          </div>
+                          {config.whatsapp ? (
+                            <div className="flex items-center gap-2">
+                              <Phone className="w-4 h-4 text-green-600 dark:text-green-400" />
+                              <Input
+                                value={config.whatsapp}
+                                className="bg-white dark:bg-zinc-800 border-slate-200 dark:border-zinc-700"
+                                readOnly
+                              />
+                            </div>
+                          ) : (
+                            <p className="text-sm text-slate-500 dark:text-zinc-400 italic">
+                              Sin número cargado
+                            </p>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="text-sm font-medium text-slate-700 dark:text-zinc-300 mb-2 block">
+                            Correos que reciben copia
+                          </label>
+                          {config.hrEmails.length > 0 ? (
+                            <div className="space-y-2">
+                              {config.hrEmails.map((email, idx) => (
+                                <div key={idx} className="flex items-center gap-2">
+                                  <Mail className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                  <Input
+                                    type="email"
+                                    value={email}
+                                    className="bg-white dark:bg-zinc-800 border-slate-200 dark:border-zinc-700"
+                                    readOnly
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-slate-500 dark:text-zinc-400 italic">
+                              Sin correos cargados
+                            </p>
+                          )}
                         </div>
 
                         <Separator />
