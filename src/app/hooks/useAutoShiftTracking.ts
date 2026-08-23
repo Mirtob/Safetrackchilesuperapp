@@ -12,6 +12,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import { useGeolocation } from '@/app/hooks/useGeolocation';
+import { sendNotification, textToHtml } from '@/app/services/notificationService';
 import type { Company } from '@/app/context/CompanyContext';
 import type { ClientCompany } from '@/app/services/clientPortfolioService';
 import {
@@ -41,8 +42,8 @@ export interface UseAutoShiftTracking {
   elapsedMinutes: number;
   lastClosedShift: ClosedShift | null;
   isTracking: boolean;
-  /** Aviso pendiente de enviar a la empresa, si su envío no está disponible. */
-  pendingNotice: { companyName: string; message: string } | null;
+  /** Aviso que no se pudo enviar solo y queda listo para mandar a mano. */
+  pendingNotice: { companyName: string; message: string; phone?: string } | null;
   dismissPendingNotice: () => void;
   startTracking: () => void;
   stopTracking: () => void;
@@ -76,7 +77,7 @@ export function useAutoShiftTracking({
   const [activeShift, setActiveShift] = useState<ActiveShift | null>(null);
   const [lastClosedShift, setLastClosedShift] = useState<ClosedShift | null>(null);
   const [elapsedMinutes, setElapsedMinutes] = useState(0);
-  const [pendingNotice, setPendingNotice] = useState<{ companyName: string; message: string } | null>(null);
+  const [pendingNotice, setPendingNotice] = useState<{ companyName: string; message: string; phone?: string } | null>(null);
 
   // Lecturas seguidas fuera del radio. Evita cerrar por un salto del GPS.
   const outsideCountRef = useRef(0);
@@ -90,6 +91,48 @@ export function useAutoShiftTracking({
     (companyId: string) => clients.find(c => c.id === companyId),
     [clients]
   );
+
+  /**
+   * Manda el aviso a la empresa por los canales configurados.
+   *
+   * Si ningún canal llegó —falta la función, no hay proveedor de WhatsApp, la
+   * empresa no tiene correos— se deja el mensaje a la vista para enviarlo a
+   * mano. Lo que no se hace nunca es dar por avisada a una empresa que no
+   * recibió nada.
+   */
+  const deliverNotice = useCallback(async (
+    company: Company | undefined,
+    subject: string,
+    message: string,
+    shiftId: string,
+    kind: 'arrival' | 'departure'
+  ) => {
+    const emails = company?.hrEmails?.length
+      ? company.hrEmails
+      : (company?.email ? [company.email] : []);
+    const phone = company?.whatsapp || company?.phone || '';
+
+    const result = await sendNotification({
+      to: emails,
+      whatsapp: phone,
+      subject,
+      text: message,
+      html: textToHtml(message, subject),
+    });
+
+    if (result.anyDelivered) {
+      const canales = [
+        result.email.ok ? `${result.email.sent} correo${(result.email.sent || 0) > 1 ? 's' : ''}` : null,
+        result.whatsapp.ok ? 'WhatsApp' : null,
+      ].filter(Boolean).join(' y ');
+
+      toast.success(`Aviso enviado a ${company?.name || 'la empresa'}`, { description: `Por ${canales}.` });
+      await markNotified(shiftId, kind);
+      return;
+    }
+
+    setPendingNotice({ companyName: company?.name || 'la empresa', message, phone });
+  }, []);
 
   // Retoma una faena que quedó abierta (app cerrada, batería agotada en planta).
   useEffect(() => {
@@ -208,11 +251,13 @@ export function useAutoShiftTracking({
 
       const company = companies.find(c => c.id === closed.companyId);
       if (company?.notifyOnDeparture !== false) {
-        setPendingNotice({
-          companyName: closed.companyName,
-          message: buildDepartureMessage(closed, professionalName),
-        });
-        await markNotified(closed.id, 'departure');
+        await deliverNotice(
+          company,
+          `Fin de visita en ${closed.companyName}`,
+          buildDepartureMessage(closed, professionalName),
+          closed.id,
+          'departure'
+        );
       }
     } catch (err) {
       toast.error('No se pudo cerrar la faena', { description: (err as Error).message });
@@ -274,11 +319,13 @@ export function useAutoShiftTracking({
         );
 
         if (match.company.notifyOnArrival !== false) {
-          setPendingNotice({
-            companyName: match.company.name,
-            message: buildArrivalMessage(started, professionalName),
-          });
-          await markNotified(started.id, 'arrival');
+          await deliverNotice(
+            match.company,
+            `Inicio de visita en ${match.company.name}`,
+            buildArrivalMessage(started, professionalName),
+            started.id,
+            'arrival'
+          );
         }
       } catch (err) {
         toast.error('No se pudo iniciar la faena', { description: (err as Error).message });

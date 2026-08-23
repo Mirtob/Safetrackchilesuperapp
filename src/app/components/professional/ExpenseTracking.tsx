@@ -208,7 +208,19 @@ export function ExpenseTracking({ clients }: ExpenseTrackingProps) {
   };
 
   const handleUploadReceipt = (expenseId: string) => {
-    toast.success('Subir comprobante...');
+    toast.info('Adjunta el comprobante al crear el gasto', {
+      description: 'Edita el gasto y agrega la foto o el PDF de la boleta.',
+    });
+  };
+
+  /** Abre el comprobante en una pestaña nueva. */
+  const handleViewReceipt = (expense: Expense) => {
+    const url = expense.receipts[0];
+    if (!url) {
+      toast.error('Este gasto no tiene comprobante adjunto');
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const handleSaveExpense = async (data: any) => {
@@ -453,6 +465,7 @@ export function ExpenseTracking({ clients }: ExpenseTrackingProps) {
                     <Button
                       size="sm"
                       variant="outline"
+                      onClick={() => handleViewReceipt(expense)}
                       className="flex-1 md:flex-none"
                     >
                       <Receipt className="w-3 h-3 mr-1" />

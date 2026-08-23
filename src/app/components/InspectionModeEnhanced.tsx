@@ -36,6 +36,8 @@ import { toast } from 'sonner';
 interface InspectionModeEnhancedProps {
   onBack: () => void;
   companyId?: string;
+  /** Lleva al portal de firmas para completar las que faltan. */
+  onManageSignatures?: (documentId: string) => void;
 }
 
 interface DocumentItem {
@@ -194,7 +196,7 @@ const MOCK_DOCUMENTS: DocumentItem[] = [
   }
 ];
 
-export function InspectionModeEnhanced({ onBack, companyId }: InspectionModeEnhancedProps) {
+export function InspectionModeEnhanced({ onBack, companyId, onManageSignatures }: InspectionModeEnhancedProps) {
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('month');
   const [showPeriodSelector, setShowPeriodSelector] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
@@ -697,7 +699,16 @@ export function InspectionModeEnhanced({ onBack, companyId }: InspectionModeEnha
                           </p>
                         </div>
                       </div>
-                      <Button size="sm" variant="outline" className="border-red-300 dark:border-red-700">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          onManageSignatures
+                            ? onManageSignatures(doc.id)
+                            : toast.info('Completa estas firmas desde Firma Remota')
+                        }
+                        className="border-red-300 dark:border-red-700"
+                      >
                         Gestionar Firmas
                       </Button>
                     </div>

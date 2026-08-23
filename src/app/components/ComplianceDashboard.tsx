@@ -56,6 +56,15 @@ const monthlyTrend = [
 
 export function ComplianceDashboard({ onBack, onNavigateToDocuments, onNavigateToCalendar, onNavigateToInspections, onNavigateToTraining }: ComplianceDashboardProps) {
   
+  /** El desglose de requisitos legales vive en la bóveda documental. */
+  const handleViewFullDetail = () => {
+    if (onNavigateToDocuments) {
+      onNavigateToDocuments();
+      return;
+    }
+    toast.info('El detalle está en la Bóveda Documental');
+  };
+
   const handleExportReport = () => {
     toast.loading('Generando reporte de cumplimiento...');
     
@@ -255,7 +264,11 @@ export function ComplianceDashboard({ onBack, onNavigateToDocuments, onNavigateT
                 </div>
 
                 {/* Botón de Acción */}
-                <Button size="lg" className="bg-[#0055A4] hover:bg-blue-700 text-white shadow-md">
+                <Button
+                  size="lg"
+                  onClick={handleViewFullDetail}
+                  className="bg-[#0055A4] hover:bg-blue-700 text-white shadow-md"
+                >
                   Ver Detalle Completo
                   <ChevronRight className="w-5 h-5 ml-2" />
                 </Button>

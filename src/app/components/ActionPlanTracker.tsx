@@ -1116,7 +1116,12 @@ export function ActionPlanTracker({ onBack }: ActionPlanTrackerProps) {
                           </Badge>
                         </td>
                         <td className="text-center py-4 px-4">
-                          <Button size="sm" variant="outline" className="h-7 text-xs">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setActiveTab('hallazgos')}
+                            className="h-7 text-xs"
+                          >
                             Ver Plan
                           </Button>
                         </td>

@@ -4,12 +4,13 @@ import { toast } from 'sonner';
 import type { ActiveShift } from '@/app/services/shiftTrackingService';
 import { formatMoney } from '@/app/services/financeSettings';
 import { useFinanceSettings } from '@/app/hooks/useFinanceSettings';
+import { whatsappLink } from '@/app/services/notificationService';
 
 interface ActiveShiftBarProps {
   shift: ActiveShift | null;
   elapsedMinutes: number;
   isTracking: boolean;
-  pendingNotice: { companyName: string; message: string } | null;
+  pendingNotice: { companyName: string; message: string; phone?: string } | null;
   onDismissNotice: () => void;
   onCloseShift: () => void;
   onStartTracking: () => void;
@@ -131,11 +132,13 @@ function NoticeCard({
   notice,
   onDismiss,
 }: {
-  notice: { companyName: string; message: string };
+  notice: { companyName: string; message: string; phone?: string };
   onDismiss: () => void;
 }) {
   const openWhatsApp = () => {
-    window.open(`https://wa.me/?text=${encodeURIComponent(notice.message)}`, '_blank', 'noopener,noreferrer');
+    // Con el número de la empresa el chat se abre ya dirigido; sin él, el
+    // usuario elige el contacto.
+    window.open(whatsappLink(notice.phone || '', notice.message), '_blank', 'noopener,noreferrer');
     onDismiss();
   };
 

@@ -536,6 +536,10 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
           <InspectionModeEnhanced
             onBack={goBack}
             companyId={selectedCompany || undefined}
+            onManageSignatures={(documentId) => {
+              setSelectedDocumentId(documentId);
+              navigateToView('remote-signature');
+            }}
           />
         );
       
@@ -557,6 +561,10 @@ export function AppContent({ userData, onLogout }: AppContentProps) {
         return (
           <CausalAnalysis
             onBack={goBack}
+            onOpenTrainingPlan={() => navigateToView('training-history')}
+            onOpenInspectionConfig={() => navigateToView('inspection-config')}
+            onOpenMonthlyPlan={() => navigateToView('monthly-plan')}
+            onOpenIncidentReport={() => navigateToView('incident-report-form')}
           />
         );
       

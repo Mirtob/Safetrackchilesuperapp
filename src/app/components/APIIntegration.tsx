@@ -13,12 +13,32 @@ interface APIIntegrationProps {
 
 export function APIIntegration({ onBack }: APIIntegrationProps) {
   const [showKey, setShowKey] = useState(false);
-  const [apiKey] = useState('stc_live_k8j2h4g9f7d6s5a3q1w0e8r7t6y5');
+  const [apiKey, setApiKey] = useState('stc_live_k8j2h4g9f7d6s5a3q1w0e8r7t6y5');
   const [endpoint] = useState('https://api.safetrack.cl/v1/executive-dashboard');
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     toast.success(`${label} copiado al portapapeles`);
+  };
+
+  /**
+   * Genera una clave nueva en el dispositivo.
+   *
+   * El backend de la API todavía no existe, así que esto no revoca nada en un
+   * servidor: se dice explícitamente para que nadie crea que la clave anterior
+   * dejó de servir.
+   */
+  const handleRegenerateKey = () => {
+    const random = Array.from(crypto.getRandomValues(new Uint8Array(15)))
+      .map(b => b.toString(36).padStart(2, '0'))
+      .join('')
+      .slice(0, 29);
+
+    setApiKey(`stc_live_${random}`);
+    setShowKey(true);
+    toast.success('Clave regenerada', {
+      description: 'Guárdala ahora. La API de SafeTrack aún no está publicada, así que esto no revoca la anterior en el servidor.',
+    });
   };
 
   const exampleCode = `// Ejemplo de integración con JavaScript
@@ -311,11 +331,18 @@ in
         </Card>
 
         <div className="flex gap-3">
-          <Button className="flex-1 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white">
+          <Button
+            onClick={() => copyToClipboard(endpoint, 'Endpoint de la API')}
+            className="flex-1 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white"
+          >
             <ExternalLink className="w-4 h-4 mr-2" />
-            Ver Documentación Completa
+            Copiar endpoint de la API
           </Button>
-          <Button variant="outline" className="bg-white/10 border-white/20 text-white hover:bg-white/20">
+          <Button
+            variant="outline"
+            onClick={handleRegenerateKey}
+            className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+          >
             Regenerar API Key
           </Button>
         </div>

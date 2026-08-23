@@ -376,7 +376,15 @@ export function BillingManagement({ clients }: BillingManagementProps) {
               y los honorarios fijos de cada cliente. Las boletas incluyen todos los datos necesarios para el SII.
             </p>
             <div className="flex gap-2">
-              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+              <Button
+                size="sm"
+                onClick={() =>
+                  toast.info('Configúralo en la pestaña Resumen HH', {
+                    description: 'Ahí eliges el período de cada cliente y emites la boleta con sus horas.',
+                  })
+                }
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
                 <Calendar className="w-3 h-3 mr-1" />
                 Configurar Facturación Automática
               </Button>

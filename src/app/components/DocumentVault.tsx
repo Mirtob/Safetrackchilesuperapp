@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { 
-  ArrowLeft, 
-  FileText, 
+import { toast } from 'sonner';
+import {
+  ArrowLeft,
+  FileText,
   Download, 
   Search, 
   FolderOpen,
@@ -208,6 +209,26 @@ const documentFolders = [
 export function DocumentVault({ onBack, isOnline }: DocumentVaultProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+
+  /**
+   * Abre el documento en Drive.
+   *
+   * Esta bóveda lista la estructura de carpetas obligatorias, no archivos ya
+   * subidos: hasta que el documento exista en Drive no hay nada que descargar,
+   * y decirlo es más útil que un botón que no responde.
+   */
+  const handleOpenDocument = (doc: { name: string; status?: string }) => {
+    if (doc.status === 'missing' || doc.status === 'pending') {
+      toast.info(`"${doc.name}" aún no está cargado`, {
+        description: 'Súbelo desde la Bóveda Documental de la empresa.',
+      });
+      return;
+    }
+
+    toast.info('Documento almacenado en Google Drive', {
+      description: 'Ábrelo desde la Bóveda Documental, que lista los archivos reales de la empresa.',
+    });
+  };
 
   const allDocuments = documentFolders.flatMap(folder => 
     folder.documents.map(doc => ({ ...doc, folderName: folder.name, folderId: folder.id }))
@@ -451,6 +472,8 @@ export function DocumentVault({ onBack, isOnline }: DocumentVaultProps) {
                           <Button
                             size="sm"
                             variant="outline"
+                            onClick={() => handleOpenDocument(doc)}
+                            aria-label={`Abrir ${doc.name}`}
                             className="border-[#003366] text-[#003366] dark:border-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
                           >
                             <Download className="w-4 h-4" />

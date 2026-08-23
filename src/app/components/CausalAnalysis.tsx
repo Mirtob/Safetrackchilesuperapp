@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { 
-  ArrowLeft, 
+import { toast } from 'sonner';
+import {
+  ArrowLeft,
   AlertTriangle, 
   TrendingUp, 
   Users, 
@@ -38,6 +39,15 @@ import {
 
 interface CausalAnalysisProps {
   onBack: () => void;
+  /**
+   * Destinos de las recomendaciones. Cada botón lleva al módulo donde la
+   * acción se ejecuta de verdad; sin estas props avisaría que el módulo no
+   * está disponible en vez de quedarse mudo.
+   */
+  onOpenTrainingPlan?: () => void;
+  onOpenInspectionConfig?: () => void;
+  onOpenMonthlyPlan?: () => void;
+  onOpenIncidentReport?: () => void;
 }
 
 // Datos de accidentes por causa raíz
@@ -123,8 +133,25 @@ const featuredCases = [
 
 const COLORS = ['#FF8C00', '#0055A4', '#22c55e', '#eab308', '#ef4444'];
 
-export function CausalAnalysis({ onBack }: CausalAnalysisProps) {
+export function CausalAnalysis({
+  onBack,
+  onOpenTrainingPlan,
+  onOpenInspectionConfig,
+  onOpenMonthlyPlan,
+  onOpenIncidentReport,
+}: CausalAnalysisProps) {
   const [selectedCase, setSelectedCase] = useState<number | null>(null);
+
+  /** Navega al módulo, o explica por qué no puede en vez de no hacer nada. */
+  const go = (action: (() => void) | undefined, moduleName: string) => () => {
+    if (action) {
+      action();
+      return;
+    }
+    toast.info(`Abre ${moduleName} desde el menú`, {
+      description: 'Esta recomendación se ejecuta en ese módulo.',
+    });
+  };
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-900 transition-colors">
@@ -464,7 +491,10 @@ export function CausalAnalysis({ onBack }: CausalAnalysisProps) {
                   <p className="text-red-800 dark:text-red-400 mb-3">
                     35% de los incidentes están relacionados con factor humano. Se requiere reforzar programa de capacitación.
                   </p>
-                  <Button className="bg-red-600 hover:bg-red-700 text-white w-full">
+                  <Button
+                    onClick={go(onOpenTrainingPlan, 'Historial de Capacitaciones')}
+                    className="bg-red-600 hover:bg-red-700 text-white w-full"
+                  >
                     Crear Plan de Capacitación
                   </Button>
                 </div>
@@ -479,7 +509,10 @@ export function CausalAnalysis({ onBack }: CausalAnalysisProps) {
                   <p className="text-blue-800 dark:text-blue-400 mb-3">
                     25% relacionado con equipos. Implementar checklist de inspección pre-uso para herramientas críticas.
                   </p>
-                  <Button className="bg-blue-600 hover:bg-blue-700 text-white w-full">
+                  <Button
+                    onClick={go(onOpenInspectionConfig, 'Configuración de Inspecciones')}
+                    className="bg-blue-600 hover:bg-blue-700 text-white w-full"
+                  >
                     Configurar Checklists
                   </Button>
                 </div>
@@ -494,7 +527,10 @@ export function CausalAnalysis({ onBack }: CausalAnalysisProps) {
                   <p className="text-green-800 dark:text-green-400 mb-3">
                     20% por métodos. Revisar y actualizar procedimientos de trabajo en altura cada trimestre.
                   </p>
-                  <Button className="bg-green-600 hover:bg-green-700 text-white w-full">
+                  <Button
+                    onClick={go(onOpenMonthlyPlan, 'Plan de Trabajo Mensual')}
+                    className="bg-green-600 hover:bg-green-700 text-white w-full"
+                  >
                     Revisar Procedimientos
                   </Button>
                 </div>
@@ -509,7 +545,10 @@ export function CausalAnalysis({ onBack }: CausalAnalysisProps) {
                   <p className="text-purple-800 dark:text-purple-400 mb-3">
                     Implementar sistema de reporte de casi-accidentes para identificación temprana de riesgos.
                   </p>
-                  <Button className="bg-purple-600 hover:bg-purple-700 text-white w-full">
+                  <Button
+                    onClick={go(onOpenIncidentReport, 'Reporte de Incidente')}
+                    className="bg-purple-600 hover:bg-purple-700 text-white w-full"
+                  >
                     Activar Reportes Proactivos
                   </Button>
                 </div>

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { 
+import { useState, useRef } from 'react';
+import {
   ArrowLeft,
   Package,
   Plus,
@@ -85,6 +85,7 @@ export function AssetInventory({ onBack, onViewPlanner, onScanQR, onViewAlerts }
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
   const [showNextDueDateModal, setShowNextDueDateModal] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   // Base de datos de activos críticos
   const [assets] = useState<Asset[]>([
@@ -203,6 +204,86 @@ export function AssetInventory({ onBack, onViewPlanner, onScanQR, onViewAlerts }
   ]);
 
   // Filtrar activos
+  /**
+   * Exporta el inventario filtrado a CSV.
+   *
+   * Se usa punto y coma como separador porque Excel en español lo espera; con
+   * coma, el archivo se abre todo en una sola columna. El BOM inicial hace que
+   * las tildes se vean bien.
+   */
+  const handleExportCsv = () => {
+    if (filteredAssets.length === 0) {
+      toast.error('No hay activos que exportar con los filtros actuales');
+      return;
+    }
+
+    const columns: (keyof Asset)[] = [
+      'code', 'name', 'category', 'status', 'location',
+      'lastMaintenance', 'nextMaintenance', 'supplier', 'certificationNumber',
+    ];
+    const headers = [
+      'Código', 'Nombre', 'Categoría', 'Estado', 'Ubicación',
+      'Última mantención', 'Próxima mantención', 'Proveedor', 'N° certificación',
+    ];
+
+    const escape = (value: unknown): string => {
+      const text = String(value ?? '');
+      return /[";\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    };
+
+    const rows = filteredAssets.map(a => columns.map(c => escape(a[c])).join(';'));
+    // El BOM al inicio hace que Excel muestre bien las tildes.
+    const csv = String.fromCharCode(0xFEFF) + [headers.join(';'), ...rows].join('\r\n');
+
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `inventario-activos-${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+
+    toast.success(`${filteredAssets.length} activos exportados`);
+  };
+
+  /**
+   * Lee un CSV con el mismo formato del export y reporta qué trae.
+   *
+   * No escribe todavía en la base: los activos se guardan por empresa y sector,
+   * y una importación a ciegas podría duplicar el inventario. Se muestra el
+   * resumen para que el usuario confirme que el archivo es el correcto.
+   */
+  const handleImportCsv = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = ''; // permite volver a elegir el mismo archivo
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const lines = text.replace(/^/, '').split(/\r?\n/).filter(l => l.trim());
+
+      if (lines.length < 2) {
+        toast.error('El archivo no tiene filas de datos');
+        return;
+      }
+
+      const separator = lines[0].includes(';') ? ';' : ',';
+      const headers = lines[0].split(separator).map(h => h.trim().toLowerCase());
+
+      if (!headers.some(h => h.includes('código') || h.includes('codigo') || h === 'code')) {
+        toast.error('Formato no reconocido', {
+          description: 'Exporta primero el inventario para ver las columnas esperadas.',
+        });
+        return;
+      }
+
+      toast.success(`Archivo leído: ${lines.length - 1} activos`, {
+        description: 'La carga masiva al inventario todavía no está habilitada; por ahora agrégalos desde Nuevo Activo.',
+      });
+    } catch (err) {
+      toast.error('No se pudo leer el archivo', { description: (err as Error).message });
+    }
+  };
+
   const filteredAssets = assets.filter(asset => {
     const matchesSearch = 
       asset.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -474,14 +555,32 @@ export function AssetInventory({ onBack, onViewPlanner, onScanQR, onViewAlerts }
               Inventario ({filteredAssets.length})
             </h2>
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" className="border-zinc-300 dark:border-zinc-700">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleExportCsv}
+                className="border-zinc-300 dark:border-zinc-700"
+              >
                 <Download className="w-4 h-4 mr-2" />
                 Exportar
               </Button>
-              <Button size="sm" variant="outline" className="border-zinc-300 dark:border-zinc-700">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => importInputRef.current?.click()}
+                className="border-zinc-300 dark:border-zinc-700"
+              >
                 <Upload className="w-4 h-4 mr-2" />
                 Importar
               </Button>
+              {/* El input vive oculto: el botón de arriba es el control visible. */}
+              <input
+                ref={importInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                onChange={handleImportCsv}
+                className="hidden"
+              />
             </div>
           </div>
 
