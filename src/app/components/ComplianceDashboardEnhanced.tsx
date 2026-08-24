@@ -260,6 +260,11 @@ export function ComplianceDashboardEnhanced({ onBack }: ComplianceDashboardEnhan
               <Button
                 variant="outline"
                 size="sm"
+                onClick={() =>
+                  toast.info('Período del reporte', {
+                    description: 'El cumplimiento se calcula sobre el mes en curso.',
+                  })
+                }
                 className="border-white/30 text-white bg-white/10 hover:bg-white/20"
               >
                 <Calendar className="w-4 h-4 mr-1" />

@@ -15,6 +15,7 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
+import { toast } from 'sonner';
 
 interface ColorDemo {
   name: string;
@@ -30,6 +31,16 @@ interface ColorSystemDemoProps {
 
 export function ColorSystemDemo({ onBack }: ColorSystemDemoProps) {
   const [showPsychology, setShowPsychology] = useState(true);
+
+  /** Copia el nombre de la clase para pegarlo en el código. */
+  const copyClassName = async (className: string) => {
+    try {
+      await navigator.clipboard.writeText(className);
+      toast.success(`Clase "${className}" copiada`);
+    } catch {
+      toast.error('No se pudo copiar la clase');
+    }
+  };
 
   const corporateColors: ColorDemo[] = [
     {
@@ -383,15 +394,17 @@ export function ColorSystemDemo({ onBack }: ColorSystemDemoProps) {
             <div className="space-y-4">
               <h3 className="text-sm font-medium text-muted-foreground">Botones Especializados</h3>
               <div className="space-y-3 p-4 bg-card rounded-lg border">
-                <button className="btn-critical w-full">
+                {/* Muestras del sistema de estilos: al pulsarlas copian la
+                    clase, que es lo útil cuando se está maquetando. */}
+                <button className="btn-critical w-full" onClick={() => copyClassName('btn-critical')}>
                   <AlertTriangle className="w-4 h-4 mr-2 inline" />
                   Botón Crítico de Accidente
                 </button>
-                <button className="btn-safety-orange w-full">
+                <button className="btn-safety-orange w-full" onClick={() => copyClassName('btn-safety-orange')}>
                   <Zap className="w-4 h-4 mr-2 inline" />
                   Acción con Naranja de Seguridad
                 </button>
-                <button className="btn-institutional w-full">
+                <button className="btn-institutional w-full" onClick={() => copyClassName('btn-institutional')}>
                   <Shield className="w-4 h-4 mr-2 inline" />
                   Acción con Azul Institucional
                 </button>

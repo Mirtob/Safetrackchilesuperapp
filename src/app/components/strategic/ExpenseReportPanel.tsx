@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useCompany } from '@/app/context/CompanyContext';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { toast } from 'sonner';
+import { downloadCsv, datedFilename } from '@/app/utils/exportFile';
 
 interface Expense {
   id: string;
@@ -139,6 +141,31 @@ export function ExpenseReportPanel() {
     : expenses;
 
   // Calcular totales
+  /** Exporta la rendición de gastos filtrada. */
+  const handleExportExpenses = () => {
+    if (filteredExpenses.length === 0) {
+      toast.error('No hay gastos que exportar');
+      return;
+    }
+
+    downloadCsv(
+      filteredExpenses,
+      [
+        { header: 'Fecha', value: e => e.date },
+        { header: 'Empresa', value: e => e.companyName },
+        { header: 'Sucursal', value: e => e.branchName || '' },
+        { header: 'Tipo', value: e => e.type },
+        { header: 'Descripción', value: e => e.description },
+        { header: 'Monto', value: e => e.amount },
+        { header: 'Estado', value: e => e.status },
+        { header: 'Comprobante', value: e => (e.receipt ? 'Sí' : 'No') },
+      ],
+      datedFilename('rendicion-gastos', 'csv')
+    );
+
+    toast.success(`${filteredExpenses.length} gastos exportados`);
+  };
+
   const totalExpenses = filteredExpenses.reduce((sum, exp) => sum + exp.amount, 0);
   const pendingExpenses = filteredExpenses.filter(e => e.status === 'pendiente').reduce((sum, exp) => sum + exp.amount, 0);
   const approvedExpenses = filteredExpenses.filter(e => e.status === 'aprobado').reduce((sum, exp) => sum + exp.amount, 0);
@@ -192,6 +219,7 @@ export function ExpenseReportPanel() {
         <div className="flex gap-2">
           <Button
             variant="outline"
+            onClick={handleExportExpenses}
             className="border-zinc-300 dark:border-zinc-600"
           >
             <Download className="w-4 h-4 mr-2" />

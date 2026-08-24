@@ -675,7 +675,16 @@ export function SecurityCenter({ onBack }: SecurityCenterProps) {
                   {usingRealUsers ? 'Mi Acceso por Empresa' : 'Gestión de Usuarios'} ({displayUserRows.length})
                 </h3>
                 {!usingRealUsers && (
-                  <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      toast.info('Los usuarios se invitan desde Supabase', {
+                        description: 'Authentication → Users → Invite. La app refleja los accesos, no los crea.',
+                        duration: 7000,
+                      })
+                    }
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                  >
                     <Users className="w-4 h-4 mr-2" />
                     Nuevo Usuario
                   </Button>
@@ -993,7 +1002,16 @@ export function SecurityCenter({ onBack }: SecurityCenterProps) {
                                 Para habilitar la seguridad avanzada de firmas digitales, contacta al equipo de soporte 
                                 o actualiza el plan de esta empresa.
                               </p>
-                              <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white">
+                              <Button
+                                size="sm"
+                                onClick={() =>
+                                  toast.info('La firma avanzada requiere plan Enterprise', {
+                                    description: 'Escribe a soporte@safetrack.cl indicando la empresa que quieres habilitar.',
+                                    duration: 7000,
+                                  })
+                                }
+                                className="bg-red-600 hover:bg-red-700 text-white"
+                              >
                                 <Settings className="w-3 h-3 mr-2" />
                                 Activar Protección
                               </Button>

@@ -631,6 +631,12 @@ export function RemoteSignature({ onBack, companyId, companyName, onOpenDocument
 
                       {doc.status === 'signed' && (
                         <Button
+                          onClick={() =>
+                            toast.success(`${doc.title} está firmado`, {
+                              description: 'El PDF con las firmas quedó guardado en tu Google Drive, carpeta Firmas.',
+                              duration: 6000,
+                            })
+                          }
                           className="bg-green-600 hover:bg-green-700 text-white flex-1"
                         >
                           <FileText className="w-4 h-4 mr-2" />

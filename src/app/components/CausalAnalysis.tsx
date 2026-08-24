@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { downloadCsv, datedFilename } from '@/app/utils/exportFile';
 import {
   ArrowLeft,
   AlertTriangle, 
@@ -142,6 +143,20 @@ export function CausalAnalysis({
 }: CausalAnalysisProps) {
   const [selectedCase, setSelectedCase] = useState<number | null>(null);
 
+  /** Exporta el análisis de causas raíz para adjuntarlo a un informe. */
+  const handleExportReport = () => {
+    downloadCsv(
+      rootCauseData,
+      [
+        { header: 'Causa raíz', value: r => r.causa },
+        { header: 'Casos', value: r => r.casos },
+        { header: 'Porcentaje', value: r => `${r.porcentaje}%` },
+      ],
+      datedFilename('analisis-causal', 'csv')
+    );
+    toast.success('Informe exportado');
+  };
+
   /** Navega al módulo, o explica por qué no puede en vez de no hacer nada. */
   const go = (action: (() => void) | undefined, moduleName: string) => () => {
     if (action) {
@@ -172,7 +187,7 @@ export function CausalAnalysis({
                 <p className="text-sm text-zinc-600 dark:text-zinc-400">Investigación y prevención basada en datos</p>
               </div>
             </div>
-            <Button className="bg-[#FF8C00] hover:bg-orange-600 text-white">
+            <Button onClick={handleExportReport} className="bg-[#FF8C00] hover:bg-orange-600 text-white">
               <Download className="w-4 h-4 mr-2" />
               Exportar Informe
             </Button>

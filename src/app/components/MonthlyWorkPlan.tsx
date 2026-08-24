@@ -445,6 +445,12 @@ export function MonthlyWorkPlan({ onBack, company = 'Constructora Los Andes S.A.
                           <Button
                             size="sm"
                             variant="outline"
+                            onClick={() =>
+                              toast.info(task.title, {
+                                description: `Vencía el ${task.dueDate}. El registro firmado está en la Bóveda Documental.`,
+                                duration: 6000,
+                              })
+                            }
                             className="border-green-600 text-green-600"
                           >
                             <CheckCircle2 className="w-3 h-3 mr-1" />

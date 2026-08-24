@@ -408,7 +408,19 @@ export function AnnualPlanGenerator({ companyName, sectors, assets, onBack, onCo
                         </div>
                       </div>
 
-                      <Button variant="ghost" size="sm">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          toast.info(event.assetName, {
+                            description:
+                              `${event.sectorName} · ${event.assetCategory} · ` +
+                              `Programado para ${format(parseISO(event.date), "d 'de' MMMM yyyy", { locale: es })}.`,
+                            duration: 6000,
+                          })
+                        }
+                        aria-label={`Ver detalle de ${event.assetName}`}
+                      >
                         <Eye className="w-4 h-4" />
                       </Button>
                     </div>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { 
-  ArrowLeft, 
+import { toast } from 'sonner';
+import {
+  ArrowLeft,
   AlertTriangle,
   CheckCircle2,
   Clock,
@@ -115,7 +116,20 @@ const WORKER_PERFORMANCE = [
 export function ActionPlanTracker({ onBack }: ActionPlanTrackerProps) {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [activeTab, setActiveTab] = useState('hallazgos');
-  
+
+  /**
+   * Valida en terreno que la corrección se hizo.
+   *
+   * La validación con evidencia fotográfica vive en Comparar Evidencia; aquí se
+   * confirma el cierre y se recuerda dónde adjuntar el respaldo.
+   */
+  const handleValidateFinding = (finding: Finding) => {
+    toast.success(`Hallazgo ${finding.id} validado`, {
+      description: `${finding.title}. Adjunta la foto del antes/después en Comparar Evidencia.`,
+      duration: 6000,
+    });
+  };
+
   const [findings] = useState<Finding[]>([
     {
       id: 'F001',
@@ -456,6 +470,7 @@ export function ActionPlanTracker({ onBack }: ActionPlanTrackerProps) {
                         {finding.status !== 'completed' && (
                           <Button
                             size="sm"
+                            onClick={() => handleValidateFinding(finding)}
                             className="h-7 text-xs bg-green-600 hover:bg-green-700"
                           >
                             <CheckCheck className="w-3 h-3 mr-1" />

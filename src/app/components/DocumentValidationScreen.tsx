@@ -24,6 +24,7 @@ interface ExtractedField {
 
 export function DocumentValidationScreen({ onBack, onConfirm }: DocumentValidationScreenProps) {
   const [pdfZoom, setPdfZoom] = useState(100);
+  const [pdfPage, setPdfPage] = useState(1);
   const [activeField, setActiveField] = useState<string | null>(null);
   const [hasManualEdits, setHasManualEdits] = useState(false);
   
@@ -287,10 +288,22 @@ export function DocumentValidationScreen({ onBack, onConfirm }: DocumentValidati
                 <ZoomIn className="w-4 h-4" />
               </Button>
               <div className="flex-1" />
-              <Button size="sm" variant="outline">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setPdfPage(p => Math.max(1, p - 1))}
+                disabled={pdfPage <= 1}
+                aria-label="Página anterior"
+              >
                 <ChevronLeft className="w-4 h-4" />
               </Button>
-              <Button size="sm" variant="outline">
+              <span className="text-sm px-2 tabular-nums">Pág. {pdfPage}</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setPdfPage(p => p + 1)}
+                aria-label="Página siguiente"
+              >
                 <ChevronRight className="w-4 h-4" />
               </Button>
             </div>

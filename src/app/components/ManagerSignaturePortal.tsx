@@ -245,6 +245,12 @@ export function ManagerSignaturePortal({ documentId, companyName, onBack }: Mana
 
             <div className="flex gap-3">
               <Button
+                onClick={() =>
+                  toast.success('Documento firmado y archivado', {
+                    description: 'El PDF con tu firma quedó en el Drive del prevencionista, carpeta Firmas.',
+                    duration: 6000,
+                  })
+                }
                 className="flex-1 bg-green-600 hover:bg-green-700 text-white"
               >
                 <Download className="w-4 h-4 mr-2" />

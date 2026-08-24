@@ -21,6 +21,7 @@ import { Badge } from '@/app/components/ui/badge';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { toast } from 'sonner';
+import { downloadCsv, datedFilename } from '@/app/utils/exportFile';
 
 interface WorkerManagementProps {
   onBack: () => void;
@@ -163,9 +164,76 @@ export function WorkerManagement({ onBack, companyId }: WorkerManagementProps) {
       worker.position.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = filterStatus === 'all' || worker.status === filterStatus;
-    
+
     return matchesSearch && matchesStatus;
   });
+
+  const WORKER_COLUMNS = [
+    { header: 'RUT', value: (w: Worker) => w.rut },
+    { header: 'Nombre', value: (w: Worker) => w.name },
+    { header: 'Cargo', value: (w: Worker) => w.position },
+    { header: 'Empresa', value: (w: Worker) => w.company },
+    { header: 'Teléfono', value: (w: Worker) => w.phone },
+    { header: 'Email', value: (w: Worker) => w.email },
+    { header: 'Estado', value: (w: Worker) => (w.status === 'active' ? 'Activo' : 'Inactivo') },
+    { header: 'Inducción', value: (w: Worker) => (w.hasInduction ? 'Sí' : 'No') },
+    { header: 'Última capacitación', value: (w: Worker) => w.lastTraining || '' },
+  ];
+
+  /** Exporta la nómina completa, respetando los filtros de búsqueda. */
+  const handleExportWorkers = () => {
+    if (filteredWorkers.length === 0) {
+      toast.error('No hay trabajadores que exportar');
+      return;
+    }
+    downloadCsv(filteredWorkers, WORKER_COLUMNS, datedFilename('nomina-trabajadores', 'csv'));
+    toast.success(`${filteredWorkers.length} trabajadores exportados`);
+  };
+
+  /** Exporta solo los trabajadores marcados con la casilla. */
+  const handleExportSelection = () => {
+    const selected = filteredWorkers.filter(w => selectedWorkers.has(w.id));
+    if (selected.length === 0) {
+      toast.error('No hay trabajadores seleccionados');
+      return;
+    }
+    downloadCsv(selected, WORKER_COLUMNS, datedFilename('seleccion-trabajadores', 'csv'));
+    toast.success(`${selected.length} trabajadores exportados`);
+  };
+
+  /** Indica dónde se hace la carga masiva, que hoy pasa por el alta de empresa. */
+  const handleImportWorkers = () => {
+    toast.info('La carga masiva se hace al dar de alta la empresa', {
+      description: 'Exporta primero la nómina para ver el formato de columnas esperado.',
+      duration: 7000,
+    });
+  };
+
+  /** Ficha del trabajador con lo que necesita el prevencionista en terreno. */
+  const handleEditWorker = (worker: Worker) => {
+    toast.info(`${worker.name} · ${worker.rut}`, {
+      description:
+        `${worker.position} — ${worker.company}\n` +
+        `${worker.phone} · ${worker.email}\n` +
+        (worker.hasInduction ? 'Inducción al día' : 'Sin inducción registrada'),
+      duration: 8000,
+    });
+  };
+
+  /** Deja constancia de la inducción del trabajador. */
+  const handleRegisterInduction = (worker: Worker) => {
+    setWorkers(prev =>
+      prev.map(w =>
+        w.id === worker.id
+          ? { ...w, hasInduction: true, lastTraining: new Date().toISOString().split('T')[0] }
+          : w
+      )
+    );
+    toast.success('Inducción registrada', {
+      description: `${worker.name} queda con la inducción al día. Recuerda adjuntar la firma en Charla de Seguridad.`,
+      duration: 6000,
+    });
+  };
 
   const activeCount = workers.filter(w => w.status === 'active').length;
   const inductionPendingCount = workers.filter(w => !w.hasInduction && w.status === 'active').length;
@@ -332,7 +400,7 @@ export function WorkerManagement({ onBack, companyId }: WorkerManagementProps) {
                   {selectedWorkers.size} trabajador(es) seleccionado(s)
                 </span>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline">
+                  <Button size="sm" variant="outline" onClick={handleExportSelection}>
                     <Download className="w-4 h-4 mr-2" />
                     Exportar Selección
                   </Button>
@@ -362,6 +430,7 @@ export function WorkerManagement({ onBack, companyId }: WorkerManagementProps) {
           <Button
             variant="outline"
             size="sm"
+            onClick={handleExportWorkers}
           >
             <Download className="w-4 h-4 mr-2" />
             Exportar Nómina
@@ -369,6 +438,7 @@ export function WorkerManagement({ onBack, companyId }: WorkerManagementProps) {
           <Button
             variant="outline"
             size="sm"
+            onClick={handleImportWorkers}
           >
             <Upload className="w-4 h-4 mr-2" />
             Importar desde Excel
@@ -452,6 +522,7 @@ export function WorkerManagement({ onBack, companyId }: WorkerManagementProps) {
                       <Button
                         size="sm"
                         variant="outline"
+                        onClick={() => handleEditWorker(worker)}
                         className="text-[#0055A4] border-[#0055A4]/30 hover:bg-[#0055A4]/10"
                       >
                         <Edit2 className="w-4 h-4 mr-2" />
@@ -460,6 +531,7 @@ export function WorkerManagement({ onBack, companyId }: WorkerManagementProps) {
                       {!worker.hasInduction && (
                         <Button
                           size="sm"
+                          onClick={() => handleRegisterInduction(worker)}
                           className="bg-[#FF8C00] hover:bg-orange-600 text-white"
                         >
                           <CheckCircle2 className="w-4 h-4 mr-2" />

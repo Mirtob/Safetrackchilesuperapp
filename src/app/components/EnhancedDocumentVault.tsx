@@ -24,6 +24,7 @@ import {
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
+import { toast } from 'sonner';
 import { Input } from '@/app/components/ui/input';
 import { fetchCompanyDocuments } from '@/app/services/safetyTalksService';
 import { isSupabaseConfigured } from '@/app/services/supabase';
@@ -276,6 +277,30 @@ export function EnhancedDocumentVault({ onBack, isOnline, selectedCompany, compa
   const totalDocuments = companyDocuments.length;
   const legallyArchived = companyDocuments.filter(d => d.legallyArchived).length;
   const pendingSignatures = companyDocuments.filter(d => !d.legallyArchived).length;
+
+  /**
+   * Abre el documento firmado.
+   *
+   * Los archivos viven en el Drive del usuario, en SafeTrack Chile/[empresa].
+   * Un documento sin todas las firmas todavía no tiene versión final que
+   * descargar, y decirlo evita que alguien crea que se perdió.
+   */
+  const handleDownloadDocument = (doc: DocumentItem) => {
+    const pendientes = doc.signatures.filter(s => !s.signed);
+
+    if (pendientes.length > 0) {
+      toast.warning('Documento sin firmar completo', {
+        description: `Faltan ${pendientes.length} firma(s): ${pendientes.map(s => s.name).join(', ')}.`,
+        duration: 6000,
+      });
+      return;
+    }
+
+    toast.success(`${doc.name} está en tu Drive`, {
+      description: `Carpeta SafeTrack Chile / ${doc.company} / ${doc.category}.`,
+      duration: 6000,
+    });
+  };
 
   const handleNavigateToYear = (year: number) => {
     setSelectedYear(year);
@@ -636,6 +661,7 @@ export function EnhancedDocumentVault({ onBack, isOnline, selectedCompany, compa
                       </div>
                       <Button
                         size="sm"
+                        onClick={() => handleDownloadDocument(doc)}
                         className="bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0"
                       >
                         <Download className="w-4 h-4 mr-2" />

@@ -3,6 +3,7 @@ import { ArrowLeft, Navigation, MapPin, Clock, TrendingDown, Fuel, Calendar, Rou
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
+import { toast } from 'sonner';
 
 interface RouteOptimizerProps {
   onBack: () => void;
@@ -119,6 +120,34 @@ const optimizedRoutes = [
 
 export function RouteOptimizer({ onBack }: RouteOptimizerProps) {
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
+
+  /**
+   * Abre la ruta en Google Maps con las paradas en orden.
+   *
+   * Se usa la dirección de cada sucursal en vez de coordenadas: Maps las
+   * resuelve igual y el enlace queda legible si el usuario lo comparte.
+   */
+  const startRoute = (branchNames: string[]) => {
+    const addresses = branchNames
+      .map(name => branches.find(b => b.name === name)?.address || name)
+      .filter(Boolean);
+
+    if (addresses.length === 0) {
+      toast.error('Esta ruta no tiene paradas cargadas');
+      return;
+    }
+
+    const destination = encodeURIComponent(addresses[addresses.length - 1]);
+    const waypoints = addresses.slice(0, -1).map(encodeURIComponent).join('|');
+
+    const url =
+      `https://www.google.com/maps/dir/?api=1&destination=${destination}` +
+      (waypoints ? `&waypoints=${waypoints}` : '') +
+      '&travelmode=driving';
+
+    window.open(url, '_blank', 'noopener,noreferrer');
+    toast.success(`Ruta con ${addresses.length} paradas abierta en Maps`);
+  };
 
   const filteredBranches = selectedZone 
     ? branches.filter(b => b.zone === selectedZone)
@@ -457,7 +486,10 @@ export function RouteOptimizer({ onBack }: RouteOptimizerProps) {
                         </div>
                       </div>
 
-                      <Button className="w-full bg-[#003366] hover:bg-[#002244] text-white">
+                      <Button
+                        onClick={() => startRoute(route.branches)}
+                        className="w-full bg-[#003366] hover:bg-[#002244] text-white"
+                      >
                         <Navigation className="w-4 h-4 mr-2" />
                         Iniciar Ruta
                       </Button>

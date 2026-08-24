@@ -252,6 +252,21 @@ export function AssetInventory({ onBack, onViewPlanner, onScanQR, onViewAlerts }
    * y una importación a ciegas podría duplicar el inventario. Se muestra el
    * resumen para que el usuario confirme que el archivo es el correcto.
    */
+  /** Resume el historial de mantención del activo. */
+  const handleViewHistory = (asset: Asset) => {
+    const estado = asset.daysUntilMaintenance < 0
+      ? `Vencida hace ${Math.abs(asset.daysUntilMaintenance)} días`
+      : `Vence en ${asset.daysUntilMaintenance} días`;
+
+    toast.info(asset.name, {
+      description:
+        `Última mantención: ${asset.lastMaintenance} · Próxima: ${asset.nextMaintenance} (${estado})\n` +
+        `Proveedor: ${asset.supplier}` +
+        (asset.certificationNumber ? ` · Certificado ${asset.certificationNumber}` : ''),
+      duration: 8000,
+    });
+  };
+
   const handleImportCsv = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = ''; // permite volver a elegir el mismo archivo
@@ -511,6 +526,11 @@ export function AssetInventory({ onBack, onViewPlanner, onScanQR, onViewAlerts }
               </Button>
               <Button
                 variant="outline"
+                onClick={() =>
+                  toast.info('Los activos se cargan al dar de alta la empresa', {
+                    description: 'En Mi Cartera Profesional, paso de Activos y Equipos.',
+                  })
+                }
                 className="border-zinc-300 dark:border-zinc-700"
               >
                 <Plus className="w-4 h-4 mr-2" />
@@ -668,6 +688,10 @@ export function AssetInventory({ onBack, onViewPlanner, onScanQR, onViewAlerts }
                       <Button
                         size="sm"
                         variant="outline"
+                        onClick={() => {
+                          setSelectedAsset(asset);
+                          setShowNextDueDateModal(true);
+                        }}
                         className="flex-1 border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300"
                       >
                         <Edit2 className="w-4 h-4 mr-2" />
@@ -675,6 +699,7 @@ export function AssetInventory({ onBack, onViewPlanner, onScanQR, onViewAlerts }
                       </Button>
                       <Button
                         size="sm"
+                        onClick={() => handleViewHistory(asset)}
                         className="flex-1 bg-[#0055A4] hover:bg-blue-700 text-white"
                       >
                         <ExternalLink className="w-4 h-4 mr-2" />

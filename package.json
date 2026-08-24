@@ -1,8 +1,8 @@
-{
+﻿{
   "name": "safetrack-chile-mvp",
   "private": true,
   "version": "1.0.0-mvp",
-  "description": "Super-app SaaS para ingenieros en prevención de riesgos",
+  "description": "Super-app SaaS para ingenieros en prevenciÃ³n de riesgos",
   "author": "SafeTrack Chile SpA",
   "license": "PROPRIETARY",
   "type": "module",
@@ -10,7 +10,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 336",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 335",
     "type-check": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,md}\""
   },

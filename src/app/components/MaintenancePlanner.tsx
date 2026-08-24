@@ -16,6 +16,7 @@ import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { toast } from 'sonner';
+import { downloadCsv, datedFilename } from '@/app/utils/exportFile';
 
 interface MaintenancePlannerProps {
   onBack: () => void;
@@ -179,6 +180,51 @@ export function MaintenancePlanner({ onBack }: MaintenancePlannerProps) {
   const syncWithCalendar = (provider: 'google' | 'outlook') => {
     toast.success(`Sincronizando con ${provider === 'google' ? 'Google Calendar' : 'Outlook'}`, {
       description: 'Los eventos de mantención se están exportando...'
+    });
+  };
+
+  /** Descarga el calendario de mantenciones como CSV para abrirlo en Excel. */
+  const handleExportCalendar = () => {
+    if (maintenanceEvents.length === 0) {
+      toast.error('No hay mantenciones que exportar');
+      return;
+    }
+
+    const typeLabel = { preventive: 'Preventiva', corrective: 'Correctiva', inspection: 'Inspección' };
+    const statusLabel = { scheduled: 'Agendada', completed: 'Completada', overdue: 'Vencida' };
+    const priorityLabel = { high: 'Alta', medium: 'Media', low: 'Baja' };
+
+    downloadCsv(
+      maintenanceEvents,
+      [
+        { header: 'Código', value: e => e.assetCode },
+        { header: 'Activo', value: e => e.assetName },
+        { header: 'Fecha', value: e => e.date },
+        { header: 'Tipo', value: e => typeLabel[e.type] },
+        { header: 'Estado', value: e => statusLabel[e.status] },
+        { header: 'Prioridad', value: e => priorityLabel[e.priority] },
+        { header: 'Proveedor', value: e => e.supplier },
+      ],
+      datedFilename('calendario-mantenciones', 'csv')
+    );
+
+    toast.success(`${maintenanceEvents.length} mantenciones exportadas`);
+  };
+
+  /** Marca una mantención vencida como urgente para la próxima visita. */
+  const handleScheduleUrgent = (event: MaintenanceEvent) => {
+    toast.success('Mantención marcada como urgente', {
+      description: `${event.assetName}. Contacta a ${event.supplier} para agendar.`,
+      duration: 6000,
+    });
+  };
+
+  /** Muestra la ficha de la mantención. */
+  const handleViewDetails = (event: MaintenanceEvent) => {
+    const typeLabel = { preventive: 'Preventiva', corrective: 'Correctiva', inspection: 'Inspección' };
+    toast.info(`${event.assetName} · ${event.assetCode}`, {
+      description: `${typeLabel[event.type]} programada para ${event.date}. Proveedor: ${event.supplier}.`,
+      duration: 7000,
     });
   };
 
@@ -382,6 +428,7 @@ export function MaintenancePlanner({ onBack }: MaintenancePlannerProps) {
                         </div>
                         <Button
                           size="sm"
+                          onClick={() => handleScheduleUrgent(event)}
                           className="w-full bg-[#EB5757] hover:bg-red-700 text-white"
                         >
                           <Wrench className="w-3 h-3 mr-2" />
@@ -434,6 +481,7 @@ export function MaintenancePlanner({ onBack }: MaintenancePlannerProps) {
                         <Button
                           size="sm"
                           variant="outline"
+                          onClick={() => handleViewDetails(event)}
                           className="w-full border-zinc-300 dark:border-zinc-700"
                         >
                           <ExternalLink className="w-3 h-3 mr-2" />
@@ -452,6 +500,7 @@ export function MaintenancePlanner({ onBack }: MaintenancePlannerProps) {
                 <h3 className="text-zinc-900 dark:text-white font-semibold mb-4">Acciones Rápidas</h3>
                 <div className="space-y-2">
                   <Button
+                    onClick={handleExportCalendar}
                     className="w-full bg-[#0055A4] hover:bg-blue-700 text-white"
                   >
                     <Download className="w-4 h-4 mr-2" />

@@ -22,6 +22,8 @@ import {
 } from 'lucide-react';
 import { Card } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
+import { toast } from 'sonner';
+import { downloadCsv, datedFilename } from '@/app/utils/exportFile';
 import { Button } from '@/app/components/ui/button';
 
 interface IncidentDashboardWidgetProps {
@@ -173,6 +175,33 @@ export function IncidentDashboardWidget({
   const [filterPeriod, setFilterPeriod] = useState<'week' | 'month' | 'quarter' | 'year'>('month');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [incidents, setIncidents] = useState<IncidentSummary[]>(MOCK_INCIDENTS);
+
+  /** Exporta el resumen de incidentes del período seleccionado. */
+  const handleExport = () => {
+    if (incidents.length === 0) {
+      toast.error('No hay incidentes en este período');
+      return;
+    }
+
+    downloadCsv(
+      incidents,
+      [
+        { header: 'Código', value: i => i.code },
+        { header: 'Fecha', value: i => i.date },
+        { header: 'Tipo', value: i => (i.type === 'accident' ? 'Accidente' : 'Incidente') },
+        { header: 'Título', value: i => i.title },
+        { header: 'Severidad', value: i => i.severity },
+        { header: 'Estado', value: i => i.status },
+        { header: 'Sector', value: i => i.sector },
+        { header: 'Días abierto', value: i => i.daysOpen },
+        { header: 'Trabajadores afectados', value: i => i.affectedWorkers },
+        { header: 'Días de licencia', value: i => i.leaveDays ?? 0 },
+      ],
+      datedFilename(`incidentes-${filterPeriod}`, 'csv')
+    );
+
+    toast.success(`${incidents.length} incidentes exportados`);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -384,7 +413,7 @@ export function IncidentDashboardWidget({
             <option value="year">Último año</option>
           </select>
 
-          <Button size="sm" variant="outline">
+          <Button size="sm" variant="outline" onClick={handleExport}>
             <Download className="w-4 h-4 mr-2" />
             Exportar
           </Button>

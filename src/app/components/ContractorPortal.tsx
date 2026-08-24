@@ -288,7 +288,19 @@ export function ContractorPortal({ onBack }: ContractorPortalProps) {
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          <Button size="sm" variant="outline">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              toast.info(doc.name, {
+                                description:
+                                  `Estado: ${doc.status}. Validado por ${doc.validatedBy}.` +
+                                  (doc.expiryDate ? ` Vence el ${new Date(doc.expiryDate).toLocaleDateString('es-CL')}.` : ''),
+                                duration: 6000,
+                              })
+                            }
+                            aria-label={`Ver ${doc.name}`}
+                          >
                             <Download className="w-3 h-3" />
                           </Button>
                         </div>

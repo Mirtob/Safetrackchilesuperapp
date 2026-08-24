@@ -40,6 +40,7 @@ import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Textarea } from '@/app/components/ui/textarea';
 import { toast } from 'sonner';
+import { downloadCsv, datedFilename } from '@/app/utils/exportFile';
 
 interface IncidentFollowUpProps {
   onBack: () => void;
@@ -341,6 +342,32 @@ export function IncidentFollowUp({ onBack, companyId, initialIncidentId }: Incid
     return true;
   });
 
+  /** Exporta los incidentes visibles, respetando los filtros activos. */
+  const handleExportIncidents = () => {
+    if (filteredIncidents.length === 0) {
+      toast.error('No hay incidentes que exportar con los filtros actuales');
+      return;
+    }
+
+    downloadCsv(
+      filteredIncidents,
+      [
+        { header: 'ID', value: i => i.id },
+        { header: 'Fecha', value: i => i.date },
+        { header: 'Tipo', value: i => i.type },
+        { header: 'Título', value: i => i.title },
+        { header: 'Estado', value: i => i.status },
+        { header: 'Severidad', value: i => i.severity },
+        { header: 'Sector', value: i => i.sector },
+        { header: 'Días abierto', value: i => i.daysOpen },
+        { header: 'Acciones abiertas', value: i => getIncidentActions(i.id).filter(a => a.status !== 'completed').length },
+      ],
+      datedFilename('incidentes', 'csv')
+    );
+
+    toast.success(`${filteredIncidents.length} incidentes exportados`);
+  };
+
   const getIncidentActions = (incidentId: string) => {
     return actions.filter(action => action.incidentId === incidentId);
   };
@@ -588,7 +615,7 @@ export function IncidentFollowUp({ onBack, companyId, initialIncidentId }: Incid
                 <option value="incident">Incidentes</option>
               </select>
 
-              <Button size="sm" variant="outline">
+              <Button size="sm" variant="outline" onClick={handleExportIncidents}>
                 <Download className="w-4 h-4 mr-2" />
                 Exportar
               </Button>

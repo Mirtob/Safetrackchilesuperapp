@@ -11,6 +11,8 @@ import {
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
+import { toast } from 'sonner';
+import { shareOrCopy } from '@/app/utils/exportFile';
 
 interface Evidence {
   id: string;
@@ -29,6 +31,26 @@ interface EvidenceCompareProps {
 }
 
 export function EvidenceCompare({ onBack }: EvidenceCompareProps) {
+  /** Comparte el antes/después por el canal que ofrezca el sistema. */
+  const handleShareEvidence = async (evidence: Evidence) => {
+    const text =
+      `${evidence.title}\n${evidence.location}\n\n${evidence.description}\n\n` +
+      `Antes: ${evidence.beforeDate} · Después: ${evidence.afterDate}`;
+
+    const result = await shareOrCopy({ title: evidence.title, text });
+
+    if (result === 'shared') return;
+    if (result === 'copied') toast.success('Detalle copiado al portapapeles');
+    else toast.error('No se pudo compartir la evidencia');
+  };
+
+  /** Abre las dos fotos en pestañas para guardarlas o imprimirlas. */
+  const handleOpenImages = (evidence: Evidence) => {
+    window.open(evidence.beforeImage, '_blank', 'noopener,noreferrer');
+    window.open(evidence.afterImage, '_blank', 'noopener,noreferrer');
+    toast.info('Imágenes abiertas en pestañas nuevas');
+  };
+
   const [evidences] = useState<Evidence[]>([
     {
       id: 'EV001',
@@ -175,6 +197,7 @@ export function EvidenceCompare({ onBack }: EvidenceCompareProps) {
                 <Button
                   size="sm"
                   variant="ghost"
+                  onClick={() => handleShareEvidence(evidence)}
                   className="text-xs text-zinc-400 hover:text-white"
                 >
                   <Share2 className="w-3 h-3 mr-1" />
@@ -183,10 +206,11 @@ export function EvidenceCompare({ onBack }: EvidenceCompareProps) {
                 <Button
                   size="sm"
                   variant="ghost"
+                  onClick={() => handleOpenImages(evidence)}
                   className="text-xs text-zinc-400 hover:text-white"
                 >
                   <Download className="w-3 h-3 mr-1" />
-                  Descargar PDF
+                  Ver imágenes
                 </Button>
               </div>
             </Card>

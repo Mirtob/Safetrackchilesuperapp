@@ -316,6 +316,20 @@ const toDisplayEvent = (e: ScheduledEvent, companyName?: string): DisplayEvent =
 });
 
 export function CalendarView({ onBack, onViewRouteOptimizer, companyId, companyName, branchId }: CalendarViewProps) {
+  /**
+   * Ejecuta la sugerencia según su tipo: las de ruta abren el optimizador, las
+   * legales y de productividad abren el formulario para agendar la actividad.
+   */
+  const handleApplySuggestion = (suggestion: (typeof smartSuggestions)[number]) => {
+    if (suggestion.type === 'route') {
+      onViewRouteOptimizer();
+      return;
+    }
+
+    setShowEventForm(true);
+    toast.info(suggestion.suggestion, { description: suggestion.savings });
+  };
+
   const [selectedDate, setSelectedDate] = useState<string>('2026-01-27');
   const [currentMonth] = useState(new Date(2026, 0, 1)); // Enero 2026
   const [showEventForm, setShowEventForm] = useState(false);
@@ -541,9 +555,10 @@ export function CalendarView({ onBack, onViewRouteOptimizer, companyId, companyN
                     </p>
                   </div>
                 </div>
-                <Button 
-                  size="sm" 
+                <Button
+                  size="sm"
                   variant="outline"
+                  onClick={() => handleApplySuggestion(suggestion)}
                   className="w-full border-slate-200 dark:border-zinc-600 text-[#003366] dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
                 >
                   {suggestion.actionLabel}
