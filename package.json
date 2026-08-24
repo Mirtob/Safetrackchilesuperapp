@@ -1,8 +1,8 @@
-﻿{
+{
   "name": "safetrack-chile-mvp",
   "private": true,
   "version": "1.0.0-mvp",
-  "description": "Super-app SaaS para ingenieros en prevenciÃ³n de riesgos",
+  "description": "Super-app SaaS para ingenieros en prevención de riesgos",
   "author": "SafeTrack Chile SpA",
   "license": "PROPRIETARY",
   "type": "module",
